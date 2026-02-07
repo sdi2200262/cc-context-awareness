@@ -1,6 +1,6 @@
 # cc-context-awareness
 
-Deterministic context awareness for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Provides Claude with real-time, accurate context usage data — enabling precise steering and decision-making.
+Deterministic context awareness for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Enhances the built-in context tracking with configurable thresholds and custom instruction injection — trigger workflows, save state, or steer Claude's behavior based on live usage.
 
 <p align="center">
   <img src="docs/diagram.svg" alt="cc-context-awareness architecture diagram" width="800"/>
@@ -52,6 +52,21 @@ context ████████████████░░░░ 82%        
 ```
 
 **Automatic warnings** — When context usage crosses a threshold (default: 80%), a warning is injected into the next conversation turn, telling Claude to inform you and suggest compaction.
+
+## Why This Exists
+
+Claude Code has built-in context awareness — the model receives token counts after each tool call, there's a UI meter, and a warning fires at 20% remaining. But it's hardcoded. You can't change the threshold, add multiple tiers, or inject custom instructions when context runs low.
+
+cc-context-awareness adds **configurable context injection** that deterministically steers Claude based on live context usage. When thresholds are crossed, custom messages are injected directly into Claude's conversation — triggering workflows, saving state, or changing behavior before it's too late.
+
+| | Claude Code built-in | cc-context-awareness |
+|---|---|---|
+| Thresholds | Hardcoded (20% remaining) | Fully configurable |
+| Multiple tiers | No | Yes (e.g. 60%, 80%, 95%) |
+| Custom messages | No | Yes — inject any instruction |
+| Trigger workflows | No | Yes — pre-compaction saves, behavioral changes |
+
+Configurable context thresholds are a commonly requested feature not yet available natively — see [#14258](https://github.com/anthropics/claude-code/issues/14258), [#11819](https://github.com/anthropics/claude-code/issues/11819), [#6621](https://github.com/anthropics/claude-code/issues/6621), [#3584](https://github.com/anthropics/claude-code/issues/3584).
 
 ## How It Works
 
