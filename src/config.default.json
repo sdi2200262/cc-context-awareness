@@ -15,7 +15,7 @@
     "format": "context {bar} {percentage}%",
     "color_normal": "37",
     "color_warning": "31",
-    "warning_indicator": " ⚠"
+    "warning_indicator": ""
   },
   "hook_event": "PreToolUse",
   "flag_dir": "/tmp"

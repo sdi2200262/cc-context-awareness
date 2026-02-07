@@ -12,9 +12,17 @@ Read the current config before making changes. Use targeted edits — don't over
 
 ## Handling Conflicts
 
-If the user already has a status line configured in `~/.claude/settings.json`, cc-context-awareness does **not** overwrite it by default. The installer will warn and skip. The user can re-run with `--overwrite` to replace, or manually merge the two.
+### Status line (required)
 
-If the user has existing `UserPromptSubmit` hooks, cc-context-awareness **appends** to the existing array — it does not replace other hooks.
+cc-context-awareness **requires** the `statusLine` slot in `~/.claude/settings.json`. The status line script is the only component that receives context window data from Claude Code — it writes the flag file that the hook reads. If the `statusLine` points to a different tool, **both the status bar and automatic warnings are non-functional**.
+
+If another tool is using the statusLine, the installer will print a conflict message, skip `settings.json` patching entirely, and exit. To fix:
+- Re-run with `--overwrite` to replace the existing statusLine
+- Or merge both tools into a single statusLine script manually
+
+### Hooks
+
+If existing hooks are registered for the same event, cc-context-awareness **appends** to the existing array — it does not replace other hooks.
 
 ## Config Schema
 
@@ -51,7 +59,7 @@ Controls the status bar appearance.
 | `format` | string | `"context {bar} {percentage}%"` | Format string. Supports `{bar}` and `{percentage}` |
 | `color_normal` | string | `"37"` | ANSI color code for normal state (37=white) |
 | `color_warning` | string | `"31"` | ANSI color code for warning state (31=red) |
-| `warning_indicator` | string | `" ⚠"` | Appended to bar when above a threshold |
+| `warning_indicator` | string | `""` | Appended to bar when above a threshold. Empty by default (color change is the indicator). |
 
 ### `hook_event` (string)
 

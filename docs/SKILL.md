@@ -21,8 +21,8 @@ Always read the current config before making changes. Use the Edit tool — neve
 
 ## Conflict Handling
 
+- **statusLine is required**: cc-context-awareness requires the `statusLine` slot in `settings.json`. The status line script is the only component that receives context window data from Claude Code — it writes the flag file that the hook reads. If the `statusLine` points to a different tool, **both the status bar and automatic warnings are non-functional**. Do not change the `statusLine` without asking the user. If there's a conflict, tell the user they need to either re-run the installer with `--overwrite` or merge both tools into a single statusLine script manually.
 - If the user has other hooks in `settings.json`, never remove them — only modify cc-context-awareness entries
-- If the user's `statusLine` points to a different tool, do not change it without asking
 - If editing thresholds, ensure each `level` value is unique
 
 ## Config Schema
@@ -60,7 +60,7 @@ Controls the status bar appearance.
 | `format` | string | `"context {bar} {percentage}%"` | Format string. Supports `{bar}` and `{percentage}` |
 | `color_normal` | string | `"37"` | ANSI color code for normal state (37=white) |
 | `color_warning` | string | `"31"` | ANSI color code for warning state (31=red) |
-| `warning_indicator` | string | `" ⚠"` | Appended to bar when above a threshold |
+| `warning_indicator` | string | `""` | Appended to bar when above a threshold. Empty by default (color change is the indicator). |
 
 ### `hook_event` (string)
 

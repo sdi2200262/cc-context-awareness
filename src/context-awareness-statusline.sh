@@ -32,7 +32,7 @@ BAR_EMPTY="$(echo "$CONFIG" | jq -r '.statusline.bar_empty // "░"')"
 FORMAT="$(echo "$CONFIG" | jq -r '.statusline.format // "context {bar} {percentage}%"')"
 COLOR_NORMAL="$(echo "$CONFIG" | jq -r '.statusline.color_normal // "37"')"
 COLOR_WARNING="$(echo "$CONFIG" | jq -r '.statusline.color_warning // "31"')"
-WARNING_INDICATOR="$(echo "$CONFIG" | jq -r '.statusline.warning_indicator // " ⚠"')"
+WARNING_INDICATOR="$(echo "$CONFIG" | jq -r '.statusline.warning_indicator // ""')"
 REPEAT_MODE="$(echo "$CONFIG" | jq -r '.repeat_mode // "once_per_tier_reset_on_compaction"')"
 
 FIRED_FILE="${FLAG_DIR}/.cc-ctx-fired-${SESSION_ID}"

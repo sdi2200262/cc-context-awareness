@@ -1,6 +1,6 @@
 # cc-context-awareness
 
-Context window awareness for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Get visual feedback on context usage and automatic warnings before you run out.
+Deterministic context awareness for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Provides Claude with real-time, accurate context usage data — enabling precise steering and decision-making.
 
 <p align="center">
   <img src="docs/diagram.svg" alt="cc-context-awareness architecture diagram" width="800"/>
@@ -10,6 +10,13 @@ Context window awareness for [Claude Code](https://docs.anthropic.com/en/docs/cl
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/cobuterman/cc-context-awareness/main/install.sh | bash
+```
+
+To pass flags when installing via curl, use `bash -s --`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/cobuterman/cc-context-awareness/main/install.sh | bash -s -- --overwrite
+curl -fsSL https://raw.githubusercontent.com/cobuterman/cc-context-awareness/main/install.sh | bash -s -- --hook-event PostToolUse
 ```
 
 Or clone and install locally:
@@ -41,7 +48,7 @@ Restart Claude Code after installing.
 
 ```
 context ████████████░░░░░░░░ 60%        (normal — white)
-context ████████████████░░░░ 82% ⚠      (warning — red)
+context ████████████████░░░░ 82%        (warning — red)
 ```
 
 **Automatic warnings** — When context usage crosses a threshold (default: 80%), a warning is injected into the next conversation turn, telling Claude to inform you and suggest compaction.
@@ -74,11 +81,13 @@ Switch with: `./install.sh --hook-event <event>`
 
 ### Status line
 
-Claude Code only supports **one** `statusLine` command at a time. The installer handles this carefully:
+Claude Code only supports **one** `statusLine` command at a time. cc-context-awareness **requires** the statusLine slot — the status line script is the only component that receives context window data from Claude Code. It writes the flag file that the hook reads, so without it, the hook has nothing to read and **both the status bar and automatic warnings are non-functional**.
+
+The installer handles this as follows:
 
 - **No existing statusLine**: Adds ours automatically
 - **Our statusLine already set**: No change needed, skips
-- **Another tool's statusLine**: Prints a warning with the existing command, does **not** overwrite, and continues installing the hook portion only. The status bar won't work but warnings will still fire via the hook.
+- **Another tool's statusLine**: Prints a conflict message, does **not** modify `settings.json`, and exits. Scripts are still installed to disk so you can re-run with `--overwrite` or merge manually.
 - **`--overwrite` flag**: Replaces whatever statusLine is configured with ours
 
 If you want both cc-context-awareness and another status line tool, you'll need to merge them manually into a single script that does both.
@@ -99,9 +108,11 @@ If `settings.json` exists but contains invalid JSON, the installer will:
 - Still install the scripts (so you can fix settings.json and re-run)
 - Exit without modifying the broken file
 
-<summary><h2>Use Cases</h2></summary>
+## Use Cases
 
 <details>
+
+These examples leverage the core benefit: **deterministic steering**. Claude receives real context data, not guesses — so your instructions can be precise and Claude's decisions can be informed.
 
 ### Fine-tuned compaction with persistent memory
 
@@ -131,11 +142,16 @@ You can also keep the message lean and point to external instructions:
 
 ### Default: Compaction reminder (included out of the box)
 
-The default configuration warns at 80% context usage with a message telling Claude to proactively inform you and suggest `/compact`. This catches the most common problem — sessions silently hitting context limits and triggering unexpected compaction that loses context.
+The default configuration warns at 80% context usage with a message telling Claude to proactively inform you and suggest `/compact`. This catches the most common problem — sessions silently hitting context limits and triggering unexpected compaction that loses context. With the threshold warning Claude can pause and request guidance from User on how to address remaining work.
 
 ### Graduated multi-tier warnings
 
-Add thresholds at 60%, 80%, and 95% with escalating urgency. At 60%, Claude mentions context is getting used up. At 80%, it actively suggests compaction. At 95%, it stops what it's doing and insists on wrapping up or compacting. Useful for long coding sessions where you want progressive nudges rather than a single alarm.
+Add thresholds at 60%, 80%, and 95% with escalating urgency. For example: 
+- At 60%, Claude mentions context is getting used up.
+- At 80%, it actively suggests compaction. 
+- At 95%, it stops what it's doing and insists on wrapping up or compacting. 
+
+Useful for long coding sessions where you want progressive nudges rather than a single alarm.
 
 ```json
 {
@@ -149,7 +165,7 @@ Add thresholds at 60%, 80%, and 95% with escalating urgency. At 60%, Claude ment
 
 ### Continuous context awareness for long-horizon tasks
 
-Inform Claude at every 20% of context usage so it can deterministically manage its session tasks and decisions. Instead of a single warning at the end, Claude knows exactly where it stands throughout the session. Useful when Claude is executing long-horizon tasks — multi-file refactors, extended debugging, or multi-step plans — and needs to pace its work, prioritize what to tackle first, and decide when to wrap up rather than start something new.
+Inform Claude at every 20% of context usage so it can make decisions based on real data. Instead of a single warning at the end, Claude knows exactly where it stands throughout the session. Useful when Claude is executing long-horizon tasks — multi-file refactors, extended debugging, or multi-step plans — and needs to pace its work, prioritize what to tackle first, and decide when to wrap up rather than start something new.
 
 ```json
 {
@@ -166,7 +182,7 @@ Inform Claude at every 20% of context usage so it can deterministically manage i
 
 </details>
 
-<summary><h2>Configuration</h2></summary>
+## Configuration
 
 <details>
 
@@ -194,7 +210,7 @@ By default, an agent skill is installed that teaches Claude the full config sche
     "format": "context {bar} {percentage}%",
     "color_normal": "37",
     "color_warning": "31",
-    "warning_indicator": " ⚠"
+    "warning_indicator": ""
   },
   "hook_event": "PreToolUse",
   "flag_dir": "/tmp"
@@ -232,7 +248,7 @@ Each threshold triggers a warning when context usage reaches that percentage.
 | `format` | string | `"context {bar} {percentage}%"` | Format string. Supports `{bar}` and `{percentage}` |
 | `color_normal` | string | `"37"` | ANSI color code when below all thresholds (37=white) |
 | `color_warning` | string | `"31"` | ANSI color code when above any threshold (31=red) |
-| `warning_indicator` | string | `" ⚠"` | Appended when above a threshold |
+| `warning_indicator` | string | `""` | Appended when above a threshold. Empty by default (color change is the indicator). |
 
 #### `hook_event` (string)
 
@@ -250,7 +266,7 @@ Directory for flag files. Default: `"/tmp"`.
 
 </details>
 
-<summary><h2>Agent Skill</h2></summary>
+## Agent Skill
 
 <details>
 

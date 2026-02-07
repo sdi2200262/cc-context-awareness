@@ -235,10 +235,20 @@ else
       echo "  │   $EXISTING_CMD"
       echo "  │                                                            │"
       echo "  │ Claude Code only supports one statusLine command.          │"
-      echo "  │ Re-run with --overwrite to replace it, or merge manually.  │"
       echo "  ╰────────────────────────────────────────────────────────────╯"
       echo ""
-      echo "  Continuing without statusLine (hook will still be installed)."
+      echo "  cc-context-awareness requires the statusLine slot. The status line"
+      echo "  script is the only component that receives context window data from"
+      echo "  Claude Code — it writes the flag file that the hook reads. Without"
+      echo "  it, the hook has nothing to read and warnings will never fire."
+      echo ""
+      echo "  To fix:"
+      echo "    Re-run with --overwrite to replace the existing statusLine:"
+      echo "      ./install.sh --overwrite"
+      echo "    Or merge both tools into a single statusLine script manually."
+      echo ""
+      echo "  Scripts were installed to $INSTALL_DIR but settings.json was not modified."
+      exit 1
     fi
   else
     SETTINGS="$(echo "$SETTINGS" | jq --argjson sl "$STATUSLINE_VALUE" '. + {statusLine: $sl}')"
