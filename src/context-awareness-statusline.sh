@@ -28,21 +28,33 @@ else
 fi
 
 # Parse all config values in a single jq call (with defaults)
+# Use newlines + while loop (bash 3 compatible) to handle empty values correctly
 if [[ -n "$CONFIG_FILE" ]]; then
-  read -r FLAG_DIR BAR_WIDTH BAR_FILLED BAR_EMPTY FORMAT COLOR_NORMAL COLOR_WARNING WARNING_INDICATOR REPEAT_MODE THRESHOLDS_JSON <<< "$(jq -r '
-    [
-      .flag_dir // "/tmp",
-      .statusline.bar_width // 20,
-      .statusline.bar_filled // "█",
-      .statusline.bar_empty // "░",
-      .statusline.format // "context {bar} {percentage}%",
-      .statusline.color_normal // "37",
-      .statusline.color_warning // "31",
-      .statusline.warning_indicator // "",
-      .repeat_mode // "once_per_tier_reset_on_compaction",
-      (.thresholds // [] | @json)
-    ] | @tsv
-  ' "$CONFIG_FILE")"
+  CONFIG_VALUES=()
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    CONFIG_VALUES+=("$line")
+  done < <(jq -r '
+    (.flag_dir // "/tmp"),
+    (.statusline.bar_width // 20 | tostring),
+    (.statusline.bar_filled // "█"),
+    (.statusline.bar_empty // "░"),
+    (.statusline.format // "context {bar} {percentage}%"),
+    (.statusline.color_normal // "37"),
+    (.statusline.color_warning // "31"),
+    (.statusline.warning_indicator // ""),
+    (.repeat_mode // "once_per_tier_reset_on_compaction"),
+    ((.thresholds // []) | @json)
+  ' "$CONFIG_FILE")
+  FLAG_DIR="${CONFIG_VALUES[0]}"
+  BAR_WIDTH="${CONFIG_VALUES[1]}"
+  BAR_FILLED="${CONFIG_VALUES[2]}"
+  BAR_EMPTY="${CONFIG_VALUES[3]}"
+  FORMAT="${CONFIG_VALUES[4]}"
+  COLOR_NORMAL="${CONFIG_VALUES[5]}"
+  COLOR_WARNING="${CONFIG_VALUES[6]}"
+  WARNING_INDICATOR="${CONFIG_VALUES[7]}"
+  REPEAT_MODE="${CONFIG_VALUES[8]}"
+  THRESHOLDS_JSON="${CONFIG_VALUES[9]}"
 else
   # Defaults if no config file
   FLAG_DIR="/tmp"

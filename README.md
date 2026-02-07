@@ -369,6 +369,7 @@ Re-run the install script. It will update the scripts and guide but preserve you
 - **Flag-file bridge delay**: The status line writes the flag after an assistant message, and the hook reads it on the next event. With `PreToolUse` (default), this means the warning fires before the next tool call — minimal delay. With `UserPromptSubmit`, there's a full one-turn delay.
 - **Status line is exclusive**: Claude Code only supports one status line command. See [Handling Conflicts](#handling-conflicts) for how the installer deals with this.
 - **Requires `jq`**: Both scripts depend on `jq` for JSON processing.
+- **Requires bash 3.2+**: The scripts use bash features (arrays, process substitution) available in bash 3.2 and later. This is satisfied by default on macOS and most Linux distributions.
 - **Flag files in `/tmp`**: Flag files are written to `/tmp` by default. They're small and ephemeral, but if `/tmp` is unavailable, change `flag_dir` in the config.
 
 ## License
