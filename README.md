@@ -8,23 +8,30 @@ Deterministic context awareness for [Claude Code](https://docs.anthropic.com/en/
 
 ## Quick Install
 
+**Local install** (per-project, default):
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/install.sh | bash
 ```
 
-To pass flags when installing via curl, use `bash -s --`:
-
+**Global install** (all projects):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/install.sh | bash -s -- --overwrite
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/install.sh | bash -s -- --hook-event PostToolUse
+curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/install.sh | bash -s -- --global
 ```
 
-Or clone and install locally:
+| Mode | Scripts | Settings | Use case |
+|------|---------|----------|----------|
+| Local (default) | `./.claude/cc-context-awareness/` | `./.claude/settings.local.json` | Different thresholds per project |
+| Global | `~/.claude/cc-context-awareness/` | `~/.claude/settings.json` | Same config everywhere |
+
+**Priority:** Local settings override global. If you have both installed, the local config is used in that project.
+
+Or clone and install:
 
 ```bash
 git clone https://github.com/sdi2200262/cc-context-awareness.git
 cd cc-context-awareness
-./install.sh
+./install.sh           # local (this project)
+./install.sh --global  # global (all projects)
 ```
 
 Restart Claude Code after installing.
@@ -33,8 +40,9 @@ Restart Claude Code after installing.
 
 | Flag | Effect |
 |------|--------|
-| `--overwrite` | Replace an existing `statusLine` config in `settings.json` (see [Handling Conflicts](#handling-conflicts)) |
-| `--no-skill` | Skip the agent skill; install a standalone configuration guide instead (see [Agent Skill](#agent-skill)) |
+| `--global` | Install globally to `~/.claude/` instead of locally to `./.claude/` |
+| `--overwrite` | Replace an existing `statusLine` config (see [Handling Conflicts](#handling-conflicts)) |
+| `--no-skill` | Skip the agent skill; install a standalone configuration guide instead |
 | `--hook-event <event>` | Hook event for context injection. Default: `PreToolUse`. Also accepts `PostToolUse`, `UserPromptSubmit` |
 
 ### Requirements
@@ -334,21 +342,23 @@ This skips the skill and instead places a standalone configuration guide at `~/.
 ## Uninstall
 
 ```bash
-# If you still have the repo cloned:
-./uninstall.sh
+./uninstall.sh           # local (this project)
+./uninstall.sh --global  # global
 
-# Or download and run:
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/uninstall.sh | bash
+# Or via curl:
+curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/uninstall.sh | bash                  # local
+curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/uninstall.sh | bash -s -- --global   # global
 ```
 
-This removes all installed files (including the skill if installed), cleans up `settings.json` entries, and deletes flag files. Other hooks and settings are left intact.
+This removes all installed files (including the skill if installed), cleans up settings entries, and deletes flag files. Other hooks and settings are left intact.
 
 ## Reinstalling / Upgrading
 
 Re-run the install script. It will update the scripts and guide but preserve your existing `config.json` customizations.
 
 ```bash
-./install.sh
+./install.sh           # local
+./install.sh --global  # global
 
 # Switch hook event on an existing install:
 ./install.sh --hook-event UserPromptSubmit

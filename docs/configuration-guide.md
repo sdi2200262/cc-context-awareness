@@ -4,9 +4,14 @@ This is a reference for configuring cc-context-awareness. You can read this guid
 
 ## Config File Location
 
-```
-~/.claude/cc-context-awareness/config.json
-```
+cc-context-awareness can be installed **locally** (per-project) or **globally**:
+
+| Mode | Config location | Settings file |
+|------|-----------------|---------------|
+| Local (default) | `./.claude/cc-context-awareness/config.json` | `./.claude/settings.local.json` |
+| Global | `~/.claude/cc-context-awareness/config.json` | `~/.claude/settings.json` |
+
+**Priority:** Local settings override global (per Claude Code's settings hierarchy). If both exist, the local config is effective in that project.
 
 Read the current config before making changes. Use targeted edits — don't overwrite the whole file.
 

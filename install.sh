@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # cc-context-awareness — Installer
 # Works both from a cloned repo and via curl pipe.
+# Defaults to local (per-project) install; use --global for system-wide.
 
 set -euo pipefail
 
 REPO_URL="https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main"
-INSTALL_DIR="$HOME/.claude/cc-context-awareness"
-SKILL_DIR="$HOME/.claude/skills/configure-context-awareness"
-SETTINGS_FILE="$HOME/.claude/settings.json"
 
+# Defaults
+GLOBAL=false
 OVERWRITE=false
 NO_SKILL=false
 HOOK_EVENT=""
@@ -19,6 +19,7 @@ SUPPORTED_EVENTS="PreToolUse PostToolUse UserPromptSubmit"
 # Parse flags
 while [ $# -gt 0 ]; do
   case "$1" in
+    --global) GLOBAL=true; shift ;;
     --overwrite) OVERWRITE=true; shift ;;
     --no-skill) NO_SKILL=true; shift ;;
     --hook-event)
@@ -39,20 +40,26 @@ while [ $# -gt 0 ]; do
     -h|--help)
       echo "Usage: install.sh [OPTIONS]"
       echo ""
+      echo "By default, installs locally to ./.claude/ (per-project config)."
+      echo "Use --global to install to ~/.claude/ (system-wide config)."
+      echo ""
       echo "Options:"
-      echo "  --overwrite            Replace existing statusLine config in settings.json"
+      echo "  --global               Install globally to ~/.claude/ instead of locally"
+      echo "  --overwrite            Replace existing statusLine config in settings"
       echo "  --no-skill             Skip the agent skill; install a standalone configuration guide instead"
       echo "  --hook-event <event>   Hook event to use for context injection (default: PreToolUse)"
       echo "                         Supported: PreToolUse, PostToolUse, UserPromptSubmit"
       echo "  -h, --help             Show this help"
       echo ""
+      echo "Examples:"
+      echo "  ./install.sh                     # Local install (this project only)"
+      echo "  ./install.sh --global            # Global install (all projects)"
+      echo "  ./install.sh --hook-event PostToolUse"
+      echo ""
       echo "Hook events:"
       echo "  PreToolUse         Fires before every tool call inside the agentic loop (default)"
       echo "  PostToolUse        Fires after every tool call inside the agentic loop"
       echo "  UserPromptSubmit   Fires once per user prompt (no mid-loop coverage)"
-      echo ""
-      echo "To switch hook events on an existing install:"
-      echo "  ./install.sh --hook-event PostToolUse"
       exit 0
       ;;
     *) echo "Unknown option: $1 (use --help for usage)"; exit 1 ;;
@@ -71,14 +78,30 @@ if ! command -v jq &>/dev/null; then
   exit 1
 fi
 
+# ── Set paths based on install mode ───────────────────────────────────────────
+
+if [ "$GLOBAL" = true ]; then
+  CLAUDE_DIR="$HOME/.claude"
+  INSTALL_DIR="$CLAUDE_DIR/cc-context-awareness"
+  SKILL_DIR="$CLAUDE_DIR/skills/configure-context-awareness"
+  SETTINGS_FILE="$CLAUDE_DIR/settings.json"
+  INSTALL_MODE="global"
+else
+  CLAUDE_DIR="$(pwd)/.claude"
+  INSTALL_DIR="$CLAUDE_DIR/cc-context-awareness"
+  SKILL_DIR="$CLAUDE_DIR/skills/configure-context-awareness"
+  SETTINGS_FILE="$CLAUDE_DIR/settings.local.json"
+  INSTALL_MODE="local"
+fi
+
 # ── Detect source mode ───────────────────────────────────────────────────────
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 
 if [ -d "$SCRIPT_DIR/src" ] && [ -f "$SCRIPT_DIR/src/context-awareness-statusline.sh" ]; then
-  MODE="local"
+  SOURCE_MODE="local"
 else
-  MODE="remote"
+  SOURCE_MODE="remote"
 fi
 
 # ── Helper: get source file ──────────────────────────────────────────────────
@@ -87,7 +110,7 @@ get_file() {
   local rel_path="$1"
   local dest="$2"
 
-  if [ "$MODE" = "local" ]; then
+  if [ "$SOURCE_MODE" = "local" ]; then
     cp "$SCRIPT_DIR/$rel_path" "$dest"
   else
     if ! curl -fsSL "${REPO_URL}/${rel_path}" -o "$dest" 2>/dev/null; then
@@ -111,12 +134,11 @@ fi
 
 # ── Install files ────────────────────────────────────────────────────────────
 
-echo "Installing cc-context-awareness..."
+echo "Installing cc-context-awareness ($INSTALL_MODE)..."
 
 # Create install directory (fail gracefully if we can't)
 if ! mkdir -p "$INSTALL_DIR" 2>/dev/null; then
   echo "Error: Cannot create $INSTALL_DIR"
-  echo "Check that ~/.claude/ exists and is writable."
   exit 1
 fi
 
@@ -156,10 +178,11 @@ else
   echo "  Installed agent skill to $SKILL_DIR"
 fi
 
-# ── Patch settings.json ─────────────────────────────────────────────────────
+# ── Patch settings ───────────────────────────────────────────────────────────
 
-STATUSLINE_CMD="$HOME/.claude/cc-context-awareness/context-awareness-statusline.sh"
-HOOK_CMD="$HOME/.claude/cc-context-awareness/context-awareness-hook.sh"
+# Use absolute paths for scripts so they work regardless of cwd
+STATUSLINE_CMD="$INSTALL_DIR/context-awareness-statusline.sh"
+HOOK_CMD="$INSTALL_DIR/context-awareness-hook.sh"
 
 STATUSLINE_VALUE="$(jq -n --arg cmd "$STATUSLINE_CMD" '{"type": "command", "command": $cmd}')"
 HOOK_ENTRY="$(jq -n --arg cmd "$HOOK_CMD" '{"matcher": "", "hooks": [{"type": "command", "command": $cmd}]}')"
@@ -191,8 +214,10 @@ remove_our_hook() {
   echo "$settings"
 }
 
+SETTINGS_FILENAME="$(basename "$SETTINGS_FILE")"
+
 if [ ! -f "$SETTINGS_FILE" ]; then
-  # Create settings.json from scratch
+  # Create settings file from scratch
   mkdir -p "$(dirname "$SETTINGS_FILE")"
   jq -n \
     --argjson sl "$STATUSLINE_VALUE" \
@@ -204,16 +229,16 @@ if [ ! -f "$SETTINGS_FILE" ]; then
         ($evt): [$hook]
       }
     }' > "$SETTINGS_FILE"
-  echo "  Created $SETTINGS_FILE (hook event: $HOOK_EVENT)"
+  echo "  Created $SETTINGS_FILENAME (hook event: $HOOK_EVENT)"
 else
-  # Patch existing settings.json
+  # Patch existing settings file
   SETTINGS="$(cat "$SETTINGS_FILE")"
 
   # Validate it's valid JSON before proceeding
   if ! echo "$SETTINGS" | jq empty 2>/dev/null; then
     echo "  Error: $SETTINGS_FILE contains invalid JSON."
     echo "  Fix the file manually, then re-run the installer."
-    echo "  Scripts were installed but settings.json was not patched."
+    echo "  Scripts were installed but $SETTINGS_FILENAME was not patched."
     exit 1
   fi
 
@@ -245,7 +270,7 @@ else
       echo "      #!/usr/bin/env bash"
       echo "      INPUT=\$(cat)"
       echo "      echo \"\$INPUT\" | /path/to/your/statusline.sh"
-      echo "      echo \"\$INPUT\" | ~/.claude/cc-context-awareness/context-awareness-statusline.sh"
+      echo "      echo \"\$INPUT\" | $STATUSLINE_CMD"
       echo ""
       echo "  Option 2: Merge the flag logic into your script"
       echo "    Copy the threshold/flag-writing logic from our statusline script"
@@ -256,7 +281,7 @@ else
       echo ""
       echo "  See: https://github.com/sdi2200262/cc-context-awareness#merging-with-other-statusline-tools"
       echo ""
-      echo "  Scripts were installed to $INSTALL_DIR but settings.json was not modified."
+      echo "  Scripts were installed to $INSTALL_DIR but $SETTINGS_FILENAME was not modified."
       exit 1
     fi
   else
@@ -303,24 +328,29 @@ else
   fi
 
   echo "$SETTINGS" > "$SETTINGS_FILE"
-  echo "  Updated $SETTINGS_FILE"
+  echo "  Updated $SETTINGS_FILENAME"
 fi
 
 # ── Done ─────────────────────────────────────────────────────────────────────
 
 echo ""
-echo "✓ cc-context-awareness installed successfully!"
+echo "✓ cc-context-awareness installed successfully ($INSTALL_MODE)!"
 echo ""
-echo "  Status bar:  Shows context usage in Claude Code's status line"
-echo "  Hook event:  $HOOK_EVENT"
-echo "  Warnings:    Automatically injected when context reaches 80%"
+echo "  Install:     $INSTALL_MODE"
 echo "  Config:      $INSTALL_DIR/config.json"
+echo "  Settings:    $SETTINGS_FILE"
+echo "  Hook event:  $HOOK_EVENT"
 if [ "$NO_SKILL" = true ]; then
   echo "  Guide:       $INSTALL_DIR/configuration-guide.md"
 else
   echo "  Skill:       Ask Claude to 'configure context awareness'"
 fi
 echo ""
+if [ "$INSTALL_MODE" = "local" ]; then
+  echo "  This install applies only to this project directory."
+  echo "  Use --global to install system-wide for all projects."
+  echo ""
+fi
 echo "  Restart Claude Code to activate."
 echo ""
 echo "  To change hook event: ./install.sh --hook-event <event>"
