@@ -21,7 +21,43 @@ Always read the current config before making changes. Use the Edit tool — neve
 
 ## Conflict Handling
 
-- **statusLine is required**: cc-context-awareness requires the `statusLine` slot in `settings.json`. The status line script is the only component that receives context window data from Claude Code — it writes the flag file that the hook reads. If the `statusLine` points to a different tool, **both the status bar and automatic warnings are non-functional**. Do not change the `statusLine` without asking the user. If there's a conflict, tell the user they need to either re-run the installer with `--overwrite` or merge both tools into a single statusLine script manually.
+### StatusLine conflicts
+
+If another tool (e.g. [ccstatusline](https://github.com/sirmalloc/ccstatusline)) is using the statusLine slot, cc-context-awareness can **wrap** or **merge** with it instead of replacing it. The statusline script writes a flag file that the hook reads — this bridge must be preserved.
+
+**Option 1: Wrap (recommended)**
+
+Create a wrapper script that calls both statuslines:
+
+```bash
+#!/usr/bin/env bash
+# ~/.claude/statusline-wrapper.sh
+INPUT=$(cat)
+echo "$INPUT" | /path/to/other/statusline.sh
+echo "$INPUT" | ~/.claude/cc-context-awareness/context-awareness-statusline.sh
+```
+
+Then update `settings.json`:
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/statusline-wrapper.sh"
+  }
+}
+```
+
+**Option 2: Merge**
+
+Copy the flag-writing logic from `~/.claude/cc-context-awareness/context-awareness-statusline.sh` into the existing statusline script. The critical parts are:
+1. Reading thresholds from `~/.claude/cc-context-awareness/config.json`
+2. Writing the trigger file to `/tmp/.cc-ctx-trigger-{session_id}` when thresholds are crossed
+3. Tracking fired tiers in `/tmp/.cc-ctx-fired-{session_id}`
+
+The hook reads from the trigger file, so as long as that file is written correctly, warnings will fire.
+
+### Other conflicts
+
 - If the user has other hooks in `settings.json`, never remove them — only modify cc-context-awareness entries
 - If editing thresholds, ensure each `level` value is unique
 

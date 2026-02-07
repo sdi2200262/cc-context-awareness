@@ -94,18 +94,36 @@ Switch with: `./install.sh --hook-event <event>`
 
 ## Handling Conflicts
 
-### Status line
+### Merging with other statusLine tools
 
-Claude Code only supports **one** `statusLine` command at a time. cc-context-awareness **requires** the statusLine slot — the status line script is the only component that receives context window data from Claude Code. It writes the flag file that the hook reads, so without it, the hook has nothing to read and **both the status bar and automatic warnings are non-functional**.
+Claude Code only supports **one** `statusLine` command. If you're using another statusline tool like [ccstatusline](https://github.com/sirmalloc/ccstatusline), cc-context-awareness can work alongside it — you just need to ensure the flag-writing logic runs.
 
-The installer handles this as follows:
+**Option 1: Wrap (recommended)**
+
+Create a wrapper script that calls both:
+
+```bash
+#!/usr/bin/env bash
+# ~/.claude/statusline-wrapper.sh
+INPUT=$(cat)
+echo "$INPUT" | /path/to/other/statusline.sh
+echo "$INPUT" | ~/.claude/cc-context-awareness/context-awareness-statusline.sh
+```
+
+Point your `settings.json` at the wrapper:
+```json
+{"statusLine": {"type": "command", "command": "~/.claude/statusline-wrapper.sh"}}
+```
+
+**Option 2: Merge**
+
+Copy the flag-writing logic from our statusline script into yours. The critical part is writing to `/tmp/.cc-ctx-trigger-{session_id}` when thresholds are crossed — the hook reads this file.
+
+**Installer behavior:**
 
 - **No existing statusLine**: Adds ours automatically
-- **Our statusLine already set**: No change needed, skips
-- **Another tool's statusLine**: Prints a conflict message, does **not** modify `settings.json`, and exits. Scripts are still installed to disk so you can re-run with `--overwrite` or merge manually.
-- **`--overwrite` flag**: Replaces whatever statusLine is configured with ours
-
-If you want both cc-context-awareness and another status line tool, you'll need to merge them manually into a single script that does both.
+- **Another tool's statusLine**: Prints merge instructions, does **not** modify `settings.json`
+- **`--overwrite` flag**: Replaces the existing statusLine with ours
 
 ### Hooks
 

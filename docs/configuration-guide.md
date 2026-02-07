@@ -12,13 +12,42 @@ Read the current config before making changes. Use targeted edits — don't over
 
 ## Handling Conflicts
 
-### Status line (required)
+### StatusLine conflicts
 
-cc-context-awareness **requires** the `statusLine` slot in `~/.claude/settings.json`. The status line script is the only component that receives context window data from Claude Code — it writes the flag file that the hook reads. If the `statusLine` points to a different tool, **both the status bar and automatic warnings are non-functional**.
+If another tool (e.g. [ccstatusline](https://github.com/sirmalloc/ccstatusline)) is using the statusLine slot, cc-context-awareness can **wrap** or **merge** with it. The statusline script writes a flag file that the hook reads — this bridge must be preserved for warnings to fire.
 
-If another tool is using the statusLine, the installer will print a conflict message, skip `settings.json` patching entirely, and exit. To fix:
-- Re-run with `--overwrite` to replace the existing statusLine
-- Or merge both tools into a single statusLine script manually
+**Option 1: Wrap (recommended)**
+
+Create a wrapper script that calls both statuslines:
+
+```bash
+#!/usr/bin/env bash
+# ~/.claude/statusline-wrapper.sh
+INPUT=$(cat)
+echo "$INPUT" | /path/to/other/statusline.sh
+echo "$INPUT" | ~/.claude/cc-context-awareness/context-awareness-statusline.sh
+```
+
+Then update `~/.claude/settings.json`:
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/statusline-wrapper.sh"
+  }
+}
+```
+
+**Option 2: Merge**
+
+Copy the flag-writing logic from `~/.claude/cc-context-awareness/context-awareness-statusline.sh` into your existing statusline script. The critical parts are:
+1. Reading thresholds from `~/.claude/cc-context-awareness/config.json`
+2. Writing the trigger file to `/tmp/.cc-ctx-trigger-{session_id}` when thresholds are crossed
+3. Tracking fired tiers in `/tmp/.cc-ctx-fired-{session_id}`
+
+**Option 3: Replace**
+
+Re-run the installer with `--overwrite` to replace the existing statusLine (you'll lose the other tool's functionality).
 
 ### Hooks
 
