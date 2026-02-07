@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # cc-context-awareness — Hook actuator
 # Reads trigger flag file and outputs additionalContext for Claude Code.
+# Designed to be fast in the common case (no trigger file present).
 
 set -euo pipefail
 
@@ -16,21 +17,23 @@ if [ -z "$SESSION_ID" ]; then
   exit 0
 fi
 
-# Load config to get flag_dir
+# Load config: flag_dir and hook_event in a single jq call
 if [ -f "$CONFIG_FILE" ]; then
-  FLAG_DIR="$(jq -r '.flag_dir // "/tmp"' "$CONFIG_FILE")"
+  CONFIG_VALUES="$(jq -r '[.flag_dir // "/tmp", .hook_event // "PreToolUse"] | @tsv' "$CONFIG_FILE")"
+  IFS=$'\t' read -r FLAG_DIR HOOK_EVENT <<< "$CONFIG_VALUES"
 else
   FLAG_DIR="/tmp"
+  HOOK_EVENT="PreToolUse"
 fi
 
 TRIGGER_FILE="${FLAG_DIR}/.cc-ctx-trigger-${SESSION_ID}"
 
-# Check for trigger flag
+# Fast path: no trigger file, exit immediately
 if [ ! -f "$TRIGGER_FILE" ]; then
   exit 0
 fi
 
-# Read trigger data
+# Trigger file exists — read it and inject context
 TRIGGER="$(cat "$TRIGGER_FILE")"
 MESSAGE="$(echo "$TRIGGER" | jq -r '.message // empty')"
 
@@ -40,9 +43,9 @@ if [ -z "$MESSAGE" ]; then
 fi
 
 # Output additionalContext for Claude Code
-jq -n --arg msg "$MESSAGE" '{
+jq -n --arg msg "$MESSAGE" --arg evt "$HOOK_EVENT" '{
   "hookSpecificOutput": {
-    "hookEventName": "UserPromptSubmit",
+    "hookEventName": $evt,
     "additionalContext": $msg
   }
 }'

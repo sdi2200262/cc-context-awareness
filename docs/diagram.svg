@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 420" fill="none">
+  <defs>
+    <filter id="shadow" x="-2%" y="-2%" width="104%" height="104%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.08"/>
+    </filter>
+    <marker id="arrowGray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6b6560"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7aab6e"/>
+    </marker>
+    <marker id="arrowAmber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#d4a843"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1100" height="420" rx="16" fill="#1a1a1a"/>
+  <rect x="16" y="16" width="1068" height="388" rx="12" fill="#f7f5f2"/>
+
+  <!-- Agentic loop dashed border -->
+  <rect x="270" y="50" width="660" height="190" rx="12" fill="none" stroke="#c4c0ba" stroke-width="1.5" stroke-dasharray="8 4"/>
+  <text x="600" y="74" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="14" fill="#9b9690" font-style="italic" text-anchor="middle">agentic loop</text>
+
+  <!-- Your prompt box -->
+  <rect x="56" y="112" width="160" height="56" rx="8" fill="#e8e5e0" filter="url(#shadow)"/>
+  <text x="136" y="146" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="15" fill="#3d3d3d" text-anchor="middle" font-weight="500">Your prompt</text>
+
+  <!-- Arrow: prompt → gather -->
+  <line x1="216" y1="140" x2="296" y2="140" stroke="#6b6560" stroke-width="2" marker-end="url(#arrowGray)"/>
+
+  <!-- Gather context box -->
+  <rect x="300" y="112" width="180" height="56" rx="8" fill="#d4e8d0" filter="url(#shadow)"/>
+  <text x="390" y="146" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="15" fill="#3d3d3d" text-anchor="middle" font-weight="500">Gather context</text>
+
+  <!-- Arrow: gather → take action -->
+  <line x1="480" y1="140" x2="530" y2="140" stroke="#6b6560" stroke-width="2" marker-end="url(#arrowGray)"/>
+
+  <!-- Take action box -->
+  <rect x="534" y="112" width="160" height="56" rx="8" fill="#d4e8d0" filter="url(#shadow)"/>
+  <text x="614" y="146" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="15" fill="#3d3d3d" text-anchor="middle" font-weight="500">Take action</text>
+
+  <!-- Arrow: take action → verify -->
+  <line x1="694" y1="140" x2="744" y2="140" stroke="#6b6560" stroke-width="2" marker-end="url(#arrowGray)"/>
+
+  <!-- Verify results box -->
+  <rect x="748" y="112" width="170" height="56" rx="8" fill="#d4e8d0" filter="url(#shadow)"/>
+  <text x="833" y="146" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="15" fill="#3d3d3d" text-anchor="middle" font-weight="500">Verify results</text>
+
+  <!-- Done box -->
+  <rect x="980" y="118" width="72" height="44" rx="8" fill="#e8e5e0" filter="url(#shadow)"/>
+  <text x="1016" y="146" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="15" fill="#3d3d3d" text-anchor="middle" font-weight="500">Done</text>
+
+  <!-- Arrow: verify → done -->
+  <line x1="918" y1="140" x2="976" y2="140" stroke="#6b6560" stroke-width="2" marker-end="url(#arrowGray)"/>
+
+  <!-- Agentic loop-back arrow (verify → gather) -->
+  <path d="M 800 168 L 800 210 Q 800 220 790 220 L 420 220 Q 410 220 410 210 L 410 168" fill="none" stroke="#7aab6e" stroke-width="2" marker-end="url(#arrowGreen)"/>
+
+  <!-- cc-context-awareness external node -->
+  <rect x="200" y="300" width="360" height="76" rx="8" fill="#fff8e6" stroke="#d4a843" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="380" y="332" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="15" fill="#3d3d3d" text-anchor="middle" font-weight="600">cc-context-awareness</text>
+  <text x="380" y="356" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#8a7a40" text-anchor="middle">injects warning when context threshold is crossed</text>
+
+  <!-- Dashed arrow: cc-context-awareness → gather context -->
+  <path d="M 380 300 L 380 270 L 390 270 L 390 168" fill="none" stroke="#d4a843" stroke-width="2" stroke-dasharray="6 3" marker-end="url(#arrowAmber)"/>
+</svg>

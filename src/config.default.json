@@ -17,5 +17,6 @@
     "color_warning": "31",
     "warning_indicator": " ⚠"
   },
+  "hook_event": "PreToolUse",
   "flag_dir": "/tmp"
 }

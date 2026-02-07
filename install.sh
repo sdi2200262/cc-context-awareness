@@ -11,22 +11,51 @@ SETTINGS_FILE="$HOME/.claude/settings.json"
 
 OVERWRITE=false
 NO_SKILL=false
+HOOK_EVENT=""
+
+# Supported hook events for validation
+SUPPORTED_EVENTS="PreToolUse PostToolUse UserPromptSubmit"
 
 # Parse flags
-for arg in "$@"; do
-  case "$arg" in
-    --overwrite) OVERWRITE=true ;;
-    --no-skill) NO_SKILL=true ;;
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --overwrite) OVERWRITE=true; shift ;;
+    --no-skill) NO_SKILL=true; shift ;;
+    --hook-event)
+      if [ -z "${2:-}" ]; then
+        echo "Error: --hook-event requires a value"
+        echo "Supported: $SUPPORTED_EVENTS"
+        exit 1
+      fi
+      HOOK_EVENT="$2"
+      # Validate
+      if ! echo "$SUPPORTED_EVENTS" | grep -qw "$HOOK_EVENT"; then
+        echo "Error: Unsupported hook event '$HOOK_EVENT'"
+        echo "Supported: $SUPPORTED_EVENTS"
+        exit 1
+      fi
+      shift 2
+      ;;
     -h|--help)
       echo "Usage: install.sh [OPTIONS]"
       echo ""
       echo "Options:"
-      echo "  --overwrite    Replace existing statusLine config in settings.json"
-      echo "  --no-skill     Skip the agent skill; install a standalone configuration guide instead"
-      echo "  -h, --help     Show this help"
+      echo "  --overwrite            Replace existing statusLine config in settings.json"
+      echo "  --no-skill             Skip the agent skill; install a standalone configuration guide instead"
+      echo "  --hook-event <event>   Hook event to use for context injection (default: PreToolUse)"
+      echo "                         Supported: PreToolUse, PostToolUse, UserPromptSubmit"
+      echo "  -h, --help             Show this help"
+      echo ""
+      echo "Hook events:"
+      echo "  PreToolUse         Fires before every tool call inside the agentic loop (default)"
+      echo "  PostToolUse        Fires after every tool call inside the agentic loop"
+      echo "  UserPromptSubmit   Fires once per user prompt (no mid-loop coverage)"
+      echo ""
+      echo "To switch hook events on an existing install:"
+      echo "  ./install.sh --hook-event PostToolUse"
       exit 0
       ;;
-    *) echo "Unknown option: $arg (use --help for usage)"; exit 1 ;;
+    *) echo "Unknown option: $1 (use --help for usage)"; exit 1 ;;
   esac
 done
 
@@ -69,6 +98,17 @@ get_file() {
   fi
 }
 
+# ── Resolve hook event ───────────────────────────────────────────────────────
+
+# Priority: --hook-event flag > existing config.json > default (PreToolUse)
+if [ -z "$HOOK_EVENT" ]; then
+  if [ -f "$INSTALL_DIR/config.json" ]; then
+    HOOK_EVENT="$(jq -r '.hook_event // "PreToolUse"' "$INSTALL_DIR/config.json")"
+  else
+    HOOK_EVENT="PreToolUse"
+  fi
+fi
+
 # ── Install files ────────────────────────────────────────────────────────────
 
 echo "Installing cc-context-awareness..."
@@ -89,6 +129,14 @@ if [ ! -f "$INSTALL_DIR/config.json" ]; then
   echo "  Created default config.json"
 else
   echo "  Existing config.json preserved (not overwritten)"
+fi
+
+# Update hook_event in config.json to match selected event
+CURRENT_EVENT="$(jq -r '.hook_event // ""' "$INSTALL_DIR/config.json")"
+if [ "$CURRENT_EVENT" != "$HOOK_EVENT" ]; then
+  TMP_CONFIG="$(jq --arg evt "$HOOK_EVENT" '.hook_event = $evt' "$INSTALL_DIR/config.json")"
+  echo "$TMP_CONFIG" > "$INSTALL_DIR/config.json"
+  echo "  Set hook_event to $HOOK_EVENT in config.json"
 fi
 
 chmod +x "$INSTALL_DIR/context-awareness-statusline.sh"
@@ -116,19 +164,47 @@ HOOK_CMD="$HOME/.claude/cc-context-awareness/context-awareness-hook.sh"
 STATUSLINE_VALUE="$(jq -n --arg cmd "$STATUSLINE_CMD" '{"type": "command", "command": $cmd}')"
 HOOK_ENTRY="$(jq -n --arg cmd "$HOOK_CMD" '{"matcher": "", "hooks": [{"type": "command", "command": $cmd}]}')"
 
+# Helper: remove our hook from a given event array in settings
+remove_our_hook() {
+  local event="$1"
+  local settings="$2"
+
+  local has_event
+  has_event="$(echo "$settings" | jq --arg evt "$event" '.hooks[$evt] // null | type == "array"')"
+
+  if [ "$has_event" = "true" ]; then
+    settings="$(echo "$settings" | jq --arg cmd "$HOOK_CMD" --arg evt "$event" '
+      .hooks[$evt] = [
+        .hooks[$evt][] |
+        select(.hooks | all(.command != $cmd))
+      ]
+    ')"
+
+    # Clean up empty arrays
+    local arr_len
+    arr_len="$(echo "$settings" | jq --arg evt "$event" '.hooks[$evt] | length')"
+    if [ "$arr_len" = "0" ]; then
+      settings="$(echo "$settings" | jq --arg evt "$event" 'del(.hooks[$evt])')"
+    fi
+  fi
+
+  echo "$settings"
+}
+
 if [ ! -f "$SETTINGS_FILE" ]; then
   # Create settings.json from scratch
   mkdir -p "$(dirname "$SETTINGS_FILE")"
   jq -n \
     --argjson sl "$STATUSLINE_VALUE" \
     --argjson hook "$HOOK_ENTRY" \
+    --arg evt "$HOOK_EVENT" \
     '{
       "statusLine": $sl,
       "hooks": {
-        "UserPromptSubmit": [$hook]
+        ($evt): [$hook]
       }
     }' > "$SETTINGS_FILE"
-  echo "  Created $SETTINGS_FILE"
+  echo "  Created $SETTINGS_FILE (hook event: $HOOK_EVENT)"
 else
   # Patch existing settings.json
   SETTINGS="$(cat "$SETTINGS_FILE")"
@@ -169,40 +245,42 @@ else
     echo "  Added statusLine config"
   fi
 
-  # Handle hooks.UserPromptSubmit
+  # Remove our hook from ALL supported events first (handles event switching)
+  for evt in $SUPPORTED_EVENTS; do
+    SETTINGS="$(remove_our_hook "$evt" "$SETTINGS")"
+  done
+
+  # Clean up empty hooks object if needed
+  HOOKS_EXISTS="$(echo "$SETTINGS" | jq 'has("hooks")')"
+  if [ "$HOOKS_EXISTS" = "true" ]; then
+    HOOKS_LEN="$(echo "$SETTINGS" | jq '.hooks | length')"
+    if [ "$HOOKS_LEN" = "0" ]; then
+      SETTINGS="$(echo "$SETTINGS" | jq 'del(.hooks)')"
+    fi
+  fi
+
+  # Add our hook to the selected event
   HAS_HOOKS_KEY="$(echo "$SETTINGS" | jq 'has("hooks")')"
 
   if [ "$HAS_HOOKS_KEY" = "true" ]; then
-    HAS_UPS="$(echo "$SETTINGS" | jq '.hooks | has("UserPromptSubmit")')"
+    HAS_EVENT="$(echo "$SETTINGS" | jq --arg evt "$HOOK_EVENT" '.hooks | has($evt)')"
 
-    if [ "$HAS_UPS" = "true" ]; then
-      # Check if our hook is already present
-      ALREADY_HAS="$(echo "$SETTINGS" | jq --arg cmd "$HOOK_CMD" '
-        .hooks.UserPromptSubmit // [] |
-        any(
-          .hooks[]? | .command == $cmd
-        )
+    if [ "$HAS_EVENT" = "true" ]; then
+      SETTINGS="$(echo "$SETTINGS" | jq --argjson hook "$HOOK_ENTRY" --arg evt "$HOOK_EVENT" '
+        .hooks[$evt] += [$hook]
       ')"
-
-      if [ "$ALREADY_HAS" = "true" ]; then
-        echo "  Hook already registered"
-      else
-        SETTINGS="$(echo "$SETTINGS" | jq --argjson hook "$HOOK_ENTRY" '
-          .hooks.UserPromptSubmit += [$hook]
-        ')"
-        echo "  Appended hook to existing UserPromptSubmit hooks (existing hooks preserved)"
-      fi
+      echo "  Added hook to $HOOK_EVENT (existing hooks preserved)"
     else
-      SETTINGS="$(echo "$SETTINGS" | jq --argjson hook "$HOOK_ENTRY" '
-        .hooks.UserPromptSubmit = [$hook]
+      SETTINGS="$(echo "$SETTINGS" | jq --argjson hook "$HOOK_ENTRY" --arg evt "$HOOK_EVENT" '
+        .hooks[$evt] = [$hook]
       ')"
-      echo "  Added UserPromptSubmit hook"
+      echo "  Added $HOOK_EVENT hook"
     fi
   else
-    SETTINGS="$(echo "$SETTINGS" | jq --argjson hook "$HOOK_ENTRY" '
-      . + {hooks: {UserPromptSubmit: [$hook]}}
+    SETTINGS="$(echo "$SETTINGS" | jq --argjson hook "$HOOK_ENTRY" --arg evt "$HOOK_EVENT" '
+      . + {hooks: {($evt): [$hook]}}
     ')"
-    echo "  Added hooks config"
+    echo "  Added hooks config ($HOOK_EVENT)"
   fi
 
   echo "$SETTINGS" > "$SETTINGS_FILE"
@@ -215,6 +293,7 @@ echo ""
 echo "✓ cc-context-awareness installed successfully!"
 echo ""
 echo "  Status bar:  Shows context usage in Claude Code's status line"
+echo "  Hook event:  $HOOK_EVENT"
 echo "  Warnings:    Automatically injected when context reaches 80%"
 echo "  Config:      $INSTALL_DIR/config.json"
 if [ "$NO_SKILL" = true ]; then
@@ -224,3 +303,6 @@ else
 fi
 echo ""
 echo "  Restart Claude Code to activate."
+echo ""
+echo "  To change hook event: ./install.sh --hook-event <event>"
+echo "  Supported: $SUPPORTED_EVENTS"

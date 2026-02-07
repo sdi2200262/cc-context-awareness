@@ -53,6 +53,21 @@ Controls the status bar appearance.
 | `color_warning` | string | `"31"` | ANSI color code for warning state (31=red) |
 | `warning_indicator` | string | `" ⚠"` | Appended to bar when above a threshold |
 
+### `hook_event` (string)
+
+Which Claude Code hook event triggers the context injection.
+
+| Value | Behavior |
+|-------|----------|
+| `"PreToolUse"` | Fires before every tool call inside the agentic loop. **Default.** |
+| `"PostToolUse"` | Fires after every tool call inside the agentic loop. |
+| `"UserPromptSubmit"` | Fires once per user prompt. No mid-loop coverage. |
+
+Changing this value also requires re-running the installer to update `settings.json`:
+```bash
+./install.sh --hook-event PostToolUse
+```
+
 ### `flag_dir` (string)
 
 Directory for flag files. Default: `"/tmp"`.

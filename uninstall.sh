@@ -10,6 +10,9 @@ SETTINGS_FILE="$HOME/.claude/settings.json"
 HOOK_CMD="$HOME/.claude/cc-context-awareness/context-awareness-hook.sh"
 STATUSLINE_CMD="$HOME/.claude/cc-context-awareness/context-awareness-statusline.sh"
 
+# All hook events we may have registered under
+SUPPORTED_EVENTS="PreToolUse PostToolUse UserPromptSubmit"
+
 echo "Uninstalling cc-context-awareness..."
 
 # ── Remove installed files ───────────────────────────────────────────────────
@@ -40,33 +43,37 @@ if [ -f "$SETTINGS_FILE" ] && command -v jq &>/dev/null; then
     echo "  Removed statusLine from settings"
   fi
 
-  # Remove our hook from UserPromptSubmit
-  HAS_UPS="$(echo "$SETTINGS" | jq '.hooks.UserPromptSubmit // null | type == "array"')"
+  # Remove our hook from ALL supported events
+  for evt in $SUPPORTED_EVENTS; do
+    HAS_EVENT="$(echo "$SETTINGS" | jq --arg evt "$evt" '.hooks[$evt] // null | type == "array"')"
 
-  if [ "$HAS_UPS" = "true" ]; then
-    SETTINGS="$(echo "$SETTINGS" | jq --arg cmd "$HOOK_CMD" '
-      .hooks.UserPromptSubmit = [
-        .hooks.UserPromptSubmit[] |
-        select(.hooks | all(.command != $cmd))
-      ]
-    ')"
+    if [ "$HAS_EVENT" = "true" ]; then
+      SETTINGS="$(echo "$SETTINGS" | jq --arg cmd "$HOOK_CMD" --arg evt "$evt" '
+        .hooks[$evt] = [
+          .hooks[$evt][] |
+          select(.hooks | all(.command != $cmd))
+        ]
+      ')"
 
-    # If the array is now empty, remove the key
-    UPS_LEN="$(echo "$SETTINGS" | jq '.hooks.UserPromptSubmit | length')"
-    if [ "$UPS_LEN" = "0" ]; then
-      SETTINGS="$(echo "$SETTINGS" | jq 'del(.hooks.UserPromptSubmit)')"
-
-      # If hooks object is now empty, remove it too
-      HOOKS_LEN="$(echo "$SETTINGS" | jq '.hooks | length')"
-      if [ "$HOOKS_LEN" = "0" ]; then
-        SETTINGS="$(echo "$SETTINGS" | jq 'del(.hooks)')"
+      # If the array is now empty, remove the key
+      ARR_LEN="$(echo "$SETTINGS" | jq --arg evt "$evt" '.hooks[$evt] | length')"
+      if [ "$ARR_LEN" = "0" ]; then
+        SETTINGS="$(echo "$SETTINGS" | jq --arg evt "$evt" 'del(.hooks[$evt])')"
       fi
     fi
+  done
 
-    echo "  Removed hook from settings"
+  # If hooks object is now empty, remove it too
+  HOOKS_EXISTS="$(echo "$SETTINGS" | jq 'has("hooks")')"
+  if [ "$HOOKS_EXISTS" = "true" ]; then
+    HOOKS_LEN="$(echo "$SETTINGS" | jq '.hooks | length')"
+    if [ "$HOOKS_LEN" = "0" ]; then
+      SETTINGS="$(echo "$SETTINGS" | jq 'del(.hooks)')"
+    fi
   fi
 
   echo "$SETTINGS" > "$SETTINGS_FILE"
+  echo "  Removed hooks from settings"
   echo "  Updated $SETTINGS_FILE"
 elif [ ! -f "$SETTINGS_FILE" ]; then
   echo "  No settings.json found (nothing to patch)"

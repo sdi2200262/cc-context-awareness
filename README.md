@@ -2,11 +2,9 @@
 
 Context window awareness for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Get visual feedback on context usage and automatic warnings before you run out.
 
-```
-Status line (sensor)        Flag file (bridge)         Hook (actuator)
-  reads context %     ──►    writes when threshold  ──►  reads flag, injects
-  renders ASCII bar          is crossed                  warning into conversation
-```
+<p align="center">
+  <img src="docs/diagram.svg" alt="cc-context-awareness architecture diagram" width="800"/>
+</p>
 
 ## Quick Install
 
@@ -30,6 +28,7 @@ Restart Claude Code after installing.
 |------|--------|
 | `--overwrite` | Replace an existing `statusLine` config in `settings.json` (see [Handling Conflicts](#handling-conflicts)) |
 | `--no-skill` | Skip the agent skill; install a standalone configuration guide instead (see [Agent Skill](#agent-skill)) |
+| `--hook-event <event>` | Hook event for context injection. Default: `PreToolUse`. Also accepts `PostToolUse`, `UserPromptSubmit` |
 
 ### Requirements
 
@@ -51,15 +50,25 @@ context ████████████████░░░░ 82% ⚠    
 
 Claude Code has two extension points that don't normally talk to each other:
 
-1. **Status line** — runs a command after each assistant response, receives context window data, but can only display text
-2. **Hooks** — run commands on events (like user prompt submit), can inject context into the conversation, but don't receive context window data
+1. **Status line** — runs after each assistant message (including between tool calls in the agentic loop), receives context window data, but can only display text
+2. **Hooks** — run on events like `PreToolUse`, can inject `additionalContext` into Claude's conversation, but don't receive context window data
 
 cc-context-awareness bridges them with a flag file on disk:
 
-1. The **status line script** (`context-awareness-statusline.sh`) receives context data from Claude Code, renders the progress bar, and when a threshold is crossed, writes a flag file to `/tmp`
-2. The **hook script** (`context-awareness-hook.sh`) runs on each user prompt. If a flag file exists, it reads the warning message, outputs it as `additionalContext` for Claude, and deletes the flag
+1. The **status line script** (`context-awareness-statusline.sh`) runs after each assistant message, receives context data, renders the progress bar, and when a threshold is crossed, writes a flag file to `/tmp`
+2. The **hook script** (`context-awareness-hook.sh`) runs on the configured hook event (default: `PreToolUse`, before every tool call). If a flag file exists, it reads the warning message, outputs it as `additionalContext` for Claude, and deletes the flag
 
-This creates a one-turn delay (the warning fires on the prompt *after* the threshold is crossed), which is acceptable since context doesn't jump dramatically between turns.
+Both scripts run inside the agentic loop — the status line updates between tool calls, and the hook checks the flag before the next tool call. Flag files are scoped per session (`/tmp/.cc-ctx-trigger-{session_id}`), so multiple Claude Code instances don't interfere with each other.
+
+### Hook event options
+
+| Event | When it fires | Trade-off |
+|-------|--------------|-----------|
+| `PreToolUse` | Before every tool call | Mid-loop coverage. Runs frequently — adds ~25ms per tool call. **Default.** |
+| `PostToolUse` | After every tool call | Same coverage, fires after instead of before. |
+| `UserPromptSubmit` | Once per user prompt | Zero overhead during agentic loops, but no mid-loop coverage. |
+
+Switch with: `./install.sh --hook-event <event>`
 
 ## Handling Conflicts
 
@@ -76,7 +85,7 @@ If you want both cc-context-awareness and another status line tool, you'll need 
 
 ### Hooks
 
-Hooks are **additive** — Claude Code supports multiple `UserPromptSubmit` hook entries. The installer:
+Hooks are **additive** — Claude Code supports multiple hook entries per event. The installer:
 
 - Appends our hook to any existing hook array (never replaces other hooks)
 - Checks for duplicates before appending (safe to re-run)
@@ -187,6 +196,7 @@ By default, an agent skill is installed that teaches Claude the full config sche
     "color_warning": "31",
     "warning_indicator": " ⚠"
   },
+  "hook_event": "PreToolUse",
   "flag_dir": "/tmp"
 }
 ```
@@ -223,6 +233,16 @@ Each threshold triggers a warning when context usage reaches that percentage.
 | `color_normal` | string | `"37"` | ANSI color code when below all thresholds (37=white) |
 | `color_warning` | string | `"31"` | ANSI color code when above any threshold (31=red) |
 | `warning_indicator` | string | `" ⚠"` | Appended when above a threshold |
+
+#### `hook_event` (string)
+
+Which Claude Code hook event triggers the context injection. Changing requires re-running the installer: `./install.sh --hook-event <event>`
+
+| Value | Behavior |
+|-------|----------|
+| `"PreToolUse"` | Before every tool call inside the agentic loop. **Default.** |
+| `"PostToolUse"` | After every tool call inside the agentic loop. |
+| `"UserPromptSubmit"` | Once per user prompt. No mid-loop coverage. |
 
 #### `flag_dir` (string)
 
@@ -270,11 +290,14 @@ Re-run the install script. It will update the scripts and guide but preserve you
 
 ```bash
 ./install.sh
+
+# Switch hook event on an existing install:
+./install.sh --hook-event UserPromptSubmit
 ```
 
 ## Known Limitations
 
-- **One-turn delay**: Warnings fire on the prompt *after* the threshold is crossed. This is inherent to the flag-file bridge architecture.
+- **Flag-file bridge delay**: The status line writes the flag after an assistant message, and the hook reads it on the next event. With `PreToolUse` (default), this means the warning fires before the next tool call — minimal delay. With `UserPromptSubmit`, there's a full one-turn delay.
 - **Status line is exclusive**: Claude Code only supports one status line command. See [Handling Conflicts](#handling-conflicts) for how the installer deals with this.
 - **Requires `jq`**: Both scripts depend on `jq` for JSON processing.
 - **Flag files in `/tmp`**: Flag files are written to `/tmp` by default. They're small and ephemeral, but if `/tmp` is unavailable, change `flag_dir` in the config.
