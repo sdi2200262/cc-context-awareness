@@ -9,20 +9,20 @@ Deterministic context awareness for [Claude Code](https://docs.anthropic.com/en/
 ## Quick Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cobuterman/cc-context-awareness/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/install.sh | bash
 ```
 
 To pass flags when installing via curl, use `bash -s --`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cobuterman/cc-context-awareness/main/install.sh | bash -s -- --overwrite
-curl -fsSL https://raw.githubusercontent.com/cobuterman/cc-context-awareness/main/install.sh | bash -s -- --hook-event PostToolUse
+curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/install.sh | bash -s -- --overwrite
+curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/install.sh | bash -s -- --hook-event PostToolUse
 ```
 
 Or clone and install locally:
 
 ```bash
-git clone https://github.com/cobuterman/cc-context-awareness.git
+git clone https://github.com/sdi2200262/cc-context-awareness.git
 cd cc-context-awareness
 ./install.sh
 ```
@@ -310,7 +310,7 @@ This skips the skill and instead places a standalone configuration guide at `~/.
 ./uninstall.sh
 
 # Or download and run:
-curl -fsSL https://raw.githubusercontent.com/cobuterman/cc-context-awareness/main/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/uninstall.sh | bash
 ```
 
 This removes all installed files (including the skill if installed), cleans up `settings.json` entries, and deletes flag files. Other hooks and settings are left intact.
