@@ -44,20 +44,18 @@ Restart Claude Code after installing.
 
 ## What It Does
 
-**Status line** — Shows a live context usage bar at the bottom of your Claude Code session:
+**Context-aware steering** — When context usage crosses a configurable threshold, custom instructions are injected directly into Claude's conversation. Use this to trigger pre-compaction workflows, save session state, change behavior, or prompt Claude to wrap up before it's too late.
+
+**Visual feedback** (optional) — A status line shows live context usage at the bottom of your Claude Code session:
 
 ```
 context ████████████░░░░░░░░ 60%        (normal — white)
 context ████████████████░░░░ 82%        (warning — red)
 ```
 
-**Automatic warnings** — When context usage crosses a threshold (default: 80%), a warning is injected into the next conversation turn, telling Claude to inform you and suggest compaction.
+## Enhancing Claude Code's Built-in Mechanism
 
-## Why This Exists
-
-Claude Code has built-in context awareness — the model receives token counts after each tool call, there's a UI meter, and a warning fires at 20% remaining. But it's hardcoded. You can't change the threshold, add multiple tiers, or inject custom instructions when context runs low.
-
-cc-context-awareness adds **configurable context injection** that deterministically steers Claude based on live context usage. When thresholds are crossed, custom messages are injected directly into Claude's conversation — triggering workflows, saving state, or changing behavior before it's too late.
+Claude Code has built-in context awareness — token counts after each tool call, a UI meter, and a warning at 20% remaining. But it's hardcoded. You can't change the threshold, add multiple tiers, or inject custom instructions.
 
 | | Claude Code built-in | cc-context-awareness |
 |---|---|---|
@@ -66,21 +64,16 @@ cc-context-awareness adds **configurable context injection** that deterministica
 | Custom messages | No | Yes — inject any instruction |
 | Trigger workflows | No | Yes — pre-compaction saves, behavioral changes |
 
-Configurable context thresholds are a commonly requested feature not yet available natively — see [#14258](https://github.com/anthropics/claude-code/issues/14258), [#11819](https://github.com/anthropics/claude-code/issues/11819), [#6621](https://github.com/anthropics/claude-code/issues/6621), [#3584](https://github.com/anthropics/claude-code/issues/3584).
+Configurable thresholds are a [commonly](https://github.com/anthropics/claude-code/issues/14258) [requested](https://github.com/anthropics/claude-code/issues/11819) [feature](https://github.com/anthropics/claude-code/issues/6621) not yet available natively.
 
 ## How It Works
 
-Claude Code has two extension points that don't normally talk to each other:
+The goal is to inject custom instructions into Claude's conversation when context thresholds are crossed. Claude Code's extension points don't support this directly, so cc-context-awareness bridges two mechanisms:
 
-1. **Status line** — runs after each assistant message (including between tool calls in the agentic loop), receives context window data, but can only display text
-2. **Hooks** — run on events like `PreToolUse`, can inject `additionalContext` into Claude's conversation, but don't receive context window data
+1. **Status line** — receives context window data after each assistant message, checks thresholds, writes a flag file when triggered
+2. **Hook** — runs before each tool call, reads the flag file, injects the message as `additionalContext` into Claude's conversation
 
-cc-context-awareness bridges them with a flag file on disk:
-
-1. The **status line script** (`context-awareness-statusline.sh`) runs after each assistant message, receives context data, renders the progress bar, and when a threshold is crossed, writes a flag file to `/tmp`
-2. The **hook script** (`context-awareness-hook.sh`) runs on the configured hook event (default: `PreToolUse`, before every tool call). If a flag file exists, it reads the warning message, outputs it as `additionalContext` for Claude, and deletes the flag
-
-Both scripts run inside the agentic loop — the status line updates between tool calls, and the hook checks the flag before the next tool call. Flag files are scoped per session (`/tmp/.cc-ctx-trigger-{session_id}`), so multiple Claude Code instances don't interfere with each other.
+This happens inside the agentic loop — Claude receives your custom instructions mid-task, not just at the end. Flag files are session-scoped (`/tmp/.cc-ctx-trigger-{session_id}`), so multiple Claude Code instances don't interfere.
 
 ### Hook event options
 
@@ -145,7 +138,7 @@ If `settings.json` exists but contains invalid JSON, the installer will:
 
 <details>
 
-These examples leverage the core benefit: **deterministic steering**. Claude receives real context data, not guesses — so your instructions can be precise and Claude's decisions can be informed.
+These examples leverage the core benefit: **deterministic steering**. Claude receives real context data, not guesses — so your instructions can be precise, whether you're running interactive sessions or autonomous agent loops.
 
 ### Fine-tuned compaction with persistent memory
 
@@ -212,6 +205,23 @@ Inform Claude at every 20% of context usage so it can make decisions based on re
   "repeat_mode": "once_per_tier_reset_on_compaction"
 }
 ```
+
+### Ralph Loops and autonomous agents
+
+[Ralph Loops](https://github.com/snarktank/ralph) (named after Ralph Wiggum) are autonomous agent loops that repeatedly feed Claude the same prompt until completion — progress persists in files and git, not context. They can run for hours, but context exhaustion is a real risk: the agent may start a new iteration cycle right before hitting the limit, losing work or behaving erratically.
+
+cc-context-awareness can steer Ralph Loops by injecting instructions before context runs out:
+
+```json
+{
+  "thresholds": [
+    {"percent": 70, "level": "ralph-warning", "message": "Context at {percentage}%. You are in an autonomous loop. Finish your current iteration cleanly — commit progress, update status files, and prepare for a potential context reset."},
+    {"percent": 90, "level": "ralph-stop", "message": "Context at {percentage}%. STOP starting new work. Complete the current iteration, commit all changes, write a handoff summary to HANDOFF.md, and signal loop completion."}
+  ]
+}
+```
+
+This ensures the agent wraps up cleanly before compaction, rather than getting cut off mid-iteration.
 
 </details>
 
