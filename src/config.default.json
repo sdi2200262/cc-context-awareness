@@ -1,0 +1,21 @@
+{
+  "thresholds": [
+    {
+      "percent": 80,
+      "level": "warning",
+      "message": "You are at {percentage}% context window usage ({remaining}% remaining). Proactively inform the user and suggest using /compact or completing the current task before context runs out."
+    }
+  ],
+  "repeat_mode": "once_per_tier_reset_on_compaction",
+  "statusline": {
+    "enabled": true,
+    "bar_width": 20,
+    "bar_filled": "█",
+    "bar_empty": "░",
+    "format": "context {bar} {percentage}%",
+    "color_normal": "37",
+    "color_warning": "31",
+    "warning_indicator": " ⚠"
+  },
+  "flag_dir": "/tmp"
+}
