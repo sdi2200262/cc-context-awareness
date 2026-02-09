@@ -5,7 +5,7 @@ description: Configure the cc-context-awareness context window warning system. U
 
 # cc-context-awareness Configuration
 
-cc-context-awareness monitors Claude Code context window usage and warns you when it's getting full. It uses a status line to show usage and a hook to inject warnings into the conversation.
+cc-context-awareness monitors Claude Code context window usage and warns you when it's getting full. It uses a status line to show usage, a hook to inject warnings into the conversation, and a reset handler to clear stale state after compaction.
 
 ## Config File
 
@@ -60,6 +60,7 @@ Copy the flag-writing logic from `~/.claude/cc-context-awareness/context-awarene
 1. Reading thresholds from `~/.claude/cc-context-awareness/config.json`
 2. Writing the trigger file to `/tmp/.cc-ctx-trigger-{session_id}` when thresholds are crossed
 3. Tracking fired tiers in `/tmp/.cc-ctx-fired-{session_id}`
+4. Clearing both files on compaction via the `SessionStart` reset handler
 
 The hook reads from the trigger file, so as long as that file is written correctly, warnings will fire.
 

@@ -44,10 +44,11 @@ else
 fi
 
 HOOK_CMD="$INSTALL_DIR/context-awareness-hook.sh"
+RESET_CMD="$INSTALL_DIR/context-awareness-reset.sh"
 STATUSLINE_CMD="$INSTALL_DIR/context-awareness-statusline.sh"
 
 # All hook events we may have registered under
-SUPPORTED_EVENTS="PreToolUse PostToolUse UserPromptSubmit"
+SUPPORTED_EVENTS="PreToolUse PostToolUse UserPromptSubmit SessionStart"
 
 echo "Uninstalling cc-context-awareness ($UNINSTALL_MODE)..."
 
@@ -89,22 +90,24 @@ if [ -f "$SETTINGS_FILE" ] && command -v jq &>/dev/null; then
 
   # Remove our hook from ALL supported events
   for evt in $SUPPORTED_EVENTS; do
-    HAS_EVENT="$(echo "$SETTINGS" | jq --arg evt "$evt" '.hooks[$evt] // null | type == "array"')"
+    for cmd in "$HOOK_CMD" "$RESET_CMD"; do
+      HAS_EVENT="$(echo "$SETTINGS" | jq --arg evt "$evt" '.hooks[$evt] // null | type == "array"')"
 
-    if [ "$HAS_EVENT" = "true" ]; then
-      SETTINGS="$(echo "$SETTINGS" | jq --arg cmd "$HOOK_CMD" --arg evt "$evt" '
-        .hooks[$evt] = [
-          .hooks[$evt][] |
-          select(.hooks | all(.command != $cmd))
-        ]
-      ')"
+      if [ "$HAS_EVENT" = "true" ]; then
+        SETTINGS="$(echo "$SETTINGS" | jq --arg cmd "$cmd" --arg evt "$evt" '
+          .hooks[$evt] = [
+            .hooks[$evt][] |
+            select(.hooks | all(.command != $cmd))
+          ]
+        ')"
 
-      # If the array is now empty, remove the key
-      ARR_LEN="$(echo "$SETTINGS" | jq --arg evt "$evt" '.hooks[$evt] | length')"
-      if [ "$ARR_LEN" = "0" ]; then
-        SETTINGS="$(echo "$SETTINGS" | jq --arg evt "$evt" 'del(.hooks[$evt])')"
+        # If the array is now empty, remove the key
+        ARR_LEN="$(echo "$SETTINGS" | jq --arg evt "$evt" '.hooks[$evt] | length')"
+        if [ "$ARR_LEN" = "0" ]; then
+          SETTINGS="$(echo "$SETTINGS" | jq --arg evt "$evt" 'del(.hooks[$evt])')"
+        fi
       fi
-    fi
+    done
   done
 
   # If hooks object is now empty, remove it too

@@ -80,8 +80,13 @@ The goal is to inject custom instructions into Claude's conversation when contex
 
 1. **Status line** — receives context window data after each assistant message, checks thresholds, writes a flag file when triggered
 2. **Hook** — runs before each tool call, reads the flag file, injects the message as `additionalContext` into Claude's conversation
+3. **Reset handler** — runs on `SessionStart` after `/compact` or auto-compaction, clears stale flag files so the post-compaction agent starts with a clean state
 
 This happens inside the agentic loop — Claude receives your custom instructions mid-task, not just at the end. Flag files are session-scoped (`/tmp/.cc-ctx-trigger-{session_id}`), so multiple Claude Code instances don't interfere.
+
+### Compaction handling
+
+When `/compact` (or auto-compaction) fires, the `session_id` stays the same but context usage drops sharply. Without cleanup, a stale trigger file from before compaction would inject an outdated high-usage warning into the fresh post-compaction agent. The `SessionStart` reset handler prevents this by deleting both the trigger and fired-tier tracking files on the compaction boundary.
 
 ### Hook event options
 
@@ -371,6 +376,7 @@ Re-run the install script. It will update the scripts and guide but preserve you
 - **Requires `jq`**: Both scripts depend on `jq` for JSON processing.
 - **Requires bash 3.2+**: The scripts use bash features (arrays, process substitution) available in bash 3.2 and later. This is satisfied by default on macOS and most Linux distributions.
 - **Flag files in `/tmp`**: Flag files are written to `/tmp` by default. They're small and ephemeral, but if `/tmp` is unavailable, change `flag_dir` in the config.
+- **Existing installs need reinstall**: If upgrading from a version without the compaction reset handler, re-run the installer to register the `SessionStart` hook.
 
 ## License
 

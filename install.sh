@@ -144,6 +144,7 @@ fi
 
 get_file "src/context-awareness-statusline.sh" "$INSTALL_DIR/context-awareness-statusline.sh"
 get_file "src/context-awareness-hook.sh" "$INSTALL_DIR/context-awareness-hook.sh"
+get_file "src/context-awareness-reset.sh" "$INSTALL_DIR/context-awareness-reset.sh"
 
 # Only copy default config if config.json doesn't already exist (preserve user customizations)
 if [ ! -f "$INSTALL_DIR/config.json" ]; then
@@ -163,6 +164,7 @@ fi
 
 chmod +x "$INSTALL_DIR/context-awareness-statusline.sh"
 chmod +x "$INSTALL_DIR/context-awareness-hook.sh"
+chmod +x "$INSTALL_DIR/context-awareness-reset.sh"
 
 echo "  Installed scripts to $INSTALL_DIR"
 
@@ -183,20 +185,23 @@ fi
 # Use absolute paths for scripts so they work regardless of cwd
 STATUSLINE_CMD="$INSTALL_DIR/context-awareness-statusline.sh"
 HOOK_CMD="$INSTALL_DIR/context-awareness-hook.sh"
+RESET_CMD="$INSTALL_DIR/context-awareness-reset.sh"
 
 STATUSLINE_VALUE="$(jq -n --arg cmd "$STATUSLINE_CMD" '{"type": "command", "command": $cmd}')"
 HOOK_ENTRY="$(jq -n --arg cmd "$HOOK_CMD" '{"matcher": "", "hooks": [{"type": "command", "command": $cmd}]}')"
+RESET_ENTRY="$(jq -n --arg cmd "$RESET_CMD" '{"matcher": "compact", "hooks": [{"type": "command", "command": $cmd}]}')"
 
 # Helper: remove our hook from a given event array in settings
 remove_our_hook() {
   local event="$1"
   local settings="$2"
+  local cmd="$3"
 
   local has_event
   has_event="$(echo "$settings" | jq --arg evt "$event" '.hooks[$evt] // null | type == "array"')"
 
   if [ "$has_event" = "true" ]; then
-    settings="$(echo "$settings" | jq --arg cmd "$HOOK_CMD" --arg evt "$event" '
+    settings="$(echo "$settings" | jq --arg cmd "$cmd" --arg evt "$event" '
       .hooks[$evt] = [
         .hooks[$evt][] |
         select(.hooks | all(.command != $cmd))
@@ -222,11 +227,13 @@ if [ ! -f "$SETTINGS_FILE" ]; then
   jq -n \
     --argjson sl "$STATUSLINE_VALUE" \
     --argjson hook "$HOOK_ENTRY" \
+    --argjson reset "$RESET_ENTRY" \
     --arg evt "$HOOK_EVENT" \
     '{
       "statusLine": $sl,
       "hooks": {
-        ($evt): [$hook]
+        ($evt): [$hook],
+        "SessionStart": [$reset]
       }
     }' > "$SETTINGS_FILE"
   echo "  Created $SETTINGS_FILENAME (hook event: $HOOK_EVENT)"
@@ -291,8 +298,11 @@ else
 
   # Remove our hook from ALL supported events first (handles event switching)
   for evt in $SUPPORTED_EVENTS; do
-    SETTINGS="$(remove_our_hook "$evt" "$SETTINGS")"
+    SETTINGS="$(remove_our_hook "$evt" "$SETTINGS" "$HOOK_CMD")"
   done
+
+  # Remove our reset hook from SessionStart (in case of reinstall)
+  SETTINGS="$(remove_our_hook "SessionStart" "$SETTINGS" "$RESET_CMD")"
 
   # Clean up empty hooks object if needed
   HOOKS_EXISTS="$(echo "$SETTINGS" | jq 'has("hooks")')"
@@ -326,6 +336,28 @@ else
     ')"
     echo "  Added hooks config ($HOOK_EVENT)"
   fi
+
+  # Add SessionStart hook for compaction reset
+  HAS_HOOKS_KEY="$(echo "$SETTINGS" | jq 'has("hooks")')"
+
+  if [ "$HAS_HOOKS_KEY" = "true" ]; then
+    HAS_SESSION_START="$(echo "$SETTINGS" | jq '.hooks | has("SessionStart")')"
+
+    if [ "$HAS_SESSION_START" = "true" ]; then
+      SETTINGS="$(echo "$SETTINGS" | jq --argjson hook "$RESET_ENTRY" '
+        .hooks.SessionStart += [$hook]
+      ')"
+    else
+      SETTINGS="$(echo "$SETTINGS" | jq --argjson hook "$RESET_ENTRY" '
+        .hooks.SessionStart = [$hook]
+      ')"
+    fi
+  else
+    SETTINGS="$(echo "$SETTINGS" | jq --argjson hook "$RESET_ENTRY" '
+      . + {hooks: {SessionStart: [$hook]}}
+    ')"
+  fi
+  echo "  Added SessionStart hook (compaction reset)"
 
   echo "$SETTINGS" > "$SETTINGS_FILE"
   echo "  Updated $SETTINGS_FILENAME"

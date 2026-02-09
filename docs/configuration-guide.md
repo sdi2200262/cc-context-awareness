@@ -49,6 +49,7 @@ Copy the flag-writing logic from `~/.claude/cc-context-awareness/context-awarene
 1. Reading thresholds from `~/.claude/cc-context-awareness/config.json`
 2. Writing the trigger file to `/tmp/.cc-ctx-trigger-{session_id}` when thresholds are crossed
 3. Tracking fired tiers in `/tmp/.cc-ctx-fired-{session_id}`
+4. Clearing both files on compaction via the `SessionStart` reset handler
 
 **Option 3: Replace**
 
