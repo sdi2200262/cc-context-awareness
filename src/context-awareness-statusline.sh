@@ -82,7 +82,7 @@ fi
 # Process all thresholds in a single jq call
 # Returns: exceeded (true/false), new_fired JSON, trigger JSON (if any)
 THRESHOLD_RESULT="$(jq -c --argjson used "$USED_PCT" --argjson remaining "$REMAINING_PCT" \
-  --argjson fired "$FIRED" --arg repeat_mode "$REPEAT_MODE" '
+  --argjson fired "$FIRED" --arg repeat_mode "$REPEAT_MODE" --arg session_id "$SESSION_ID" '
   # Sort thresholds by percent
   (. | sort_by(.percent)) as $sorted |
 
@@ -103,7 +103,7 @@ THRESHOLD_RESULT="$(jq -c --argjson used "$USED_PCT" --argjson remaining "$REMAI
           percentage: $used,
           remaining: $remaining,
           level: $t.level,
-          message: ($t.message | gsub("{percentage}"; ($used | tostring)) | gsub("{remaining}"; ($remaining | tostring)))
+          message: ($t.message | gsub("{percentage}"; ($used | tostring)) | gsub("{remaining}"; ($remaining | tostring)) | gsub("{session_id}"; $session_id))
         } |
         .fired[$t.level] = true
       else

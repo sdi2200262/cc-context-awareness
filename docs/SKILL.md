@@ -30,21 +30,45 @@ Always read the current config before making changes. Use the Edit tool — neve
 
 ### StatusLine conflicts
 
-If another tool (e.g. [ccstatusline](https://github.com/sirmalloc/ccstatusline)) is using the statusLine slot, cc-context-awareness can **wrap** or **merge** with it instead of replacing it. The statusline script writes a flag file that the hook reads — this bridge must be preserved.
+If another tool is using the `statusLine` slot, cc-context-awareness can **wrap** or **merge** with it. The statusline script writes a flag file that the hook reads — this bridge must be preserved for warnings to fire.
 
-**Option 1: Wrap (recommended)**
+#### ccstatusline integration (most common case)
 
-Create a wrapper script that calls both statuslines:
+[ccstatusline](https://github.com/sirmalloc/ccstatusline) is a popular status line formatter. If the user has it installed, their `settings.json` will have a `statusLine` entry like:
+
+```json
+{
+  "statusLine": "bunx ccstatusline@latest"
+}
+```
+or
+```json
+{
+  "statusLine": "npx ccstatusline@latest"
+}
+```
+
+**When the user already has ccstatusline installed, use a wrapper script.**
+
+**Step 1:** Identify the ccstatusline command from `~/.claude/settings.json` (or the local `.claude/settings.json`/`settings.local.json`).
+
+**Step 2:** Create a wrapper script at `~/.claude/statusline-wrapper.sh`:
 
 ```bash
 #!/usr/bin/env bash
 # ~/.claude/statusline-wrapper.sh
+# Runs ccstatusline (display) then cc-context-awareness (flag writing)
 INPUT=$(cat)
-echo "$INPUT" | /path/to/other/statusline.sh
+echo "$INPUT" | bunx ccstatusline@latest   # or: npx ccstatusline@latest
 echo "$INPUT" | ~/.claude/cc-context-awareness/context-awareness-statusline.sh
 ```
 
-Then update `settings.json`:
+Make it executable:
+```bash
+chmod +x ~/.claude/statusline-wrapper.sh
+```
+
+**Step 3:** Update `settings.json` to use the wrapper:
 ```json
 {
   "statusLine": {
@@ -52,6 +76,38 @@ Then update `settings.json`:
     "command": "~/.claude/statusline-wrapper.sh"
   }
 }
+```
+
+**Hiding the cc-context-awareness bar (optional):** ccstatusline already has a `ContextPercentage` widget that shows context usage visually. If the user doesn't want a duplicate bar, they can suppress cc-context-awareness's own output while keeping its flag-writing active. In the wrapper script, redirect cc-context-awareness output to `/dev/null`:
+
+```bash
+#!/usr/bin/env bash
+# Wrapper: ccstatusline (display) + cc-context-awareness (flag only, no display)
+INPUT=$(cat)
+echo "$INPUT" | bunx ccstatusline@latest
+echo "$INPUT" | ~/.claude/cc-context-awareness/context-awareness-statusline.sh > /dev/null
+```
+
+This preserves the full threshold/hook functionality while using ccstatusline exclusively for display.
+
+**For local installs:** The cc-context-awareness scripts are at `./.claude/cc-context-awareness/`. Adjust the wrapper paths accordingly:
+
+```bash
+#!/usr/bin/env bash
+INPUT=$(cat)
+echo "$INPUT" | bunx ccstatusline@latest
+echo "$INPUT" | "$(pwd)/.claude/cc-context-awareness/context-awareness-statusline.sh" > /dev/null
+```
+
+#### Generic wrapper (other statusline tools)
+
+For any other statusline tool:
+
+```bash
+#!/usr/bin/env bash
+INPUT=$(cat)
+echo "$INPUT" | /path/to/other/statusline.sh
+echo "$INPUT" | ~/.claude/cc-context-awareness/context-awareness-statusline.sh
 ```
 
 **Option 2: Merge**
@@ -177,6 +233,64 @@ Set `repeat_mode` to `"every_turn"`.
   "message": "Context at {percentage}%. Before continuing, summarize what you've done so far and what remains, then ask the user if they want to /compact."
 }
 ```
+
+## Templates
+
+Ready-to-use configurations for common use cases. Templates add hooks and config on top of a base cc-context-awareness install.
+
+### simple-session-memory
+
+When the user asks about memory management, session continuity after compaction, saving state before context runs out, or automated handoff — this template is the right recommendation.
+
+The simple-session-memory template adds:
+- Memory-trigger thresholds at 50%, 65%, 80% context usage → Claude writes/appends `.claude/memory/session-YYYY-MM-DD-NNN.md` (counter-based; session_id in frontmatter)
+- A `SessionStart` hook (matcher: `compact`) → after compaction, loads the most recent memory log (or archive) as `additionalContext`
+- A `Stop` hook → ensures at least one memory log is written per session
+- An agent-type `Stop` hook → every 5 session logs, a subagent archives all but the newest into `.claude/memory/archive/`
+- A session index at `.claude/memory/index.md` → maintained by Claude at each 50% checkpoint; gives fresh sessions a quick orientation into recent history
+
+**Install (must have cc-context-awareness already installed):**
+```bash
+# From repo:
+./templates/simple-session-memory/install.sh           # local
+./templates/simple-session-memory/install.sh --global  # global
+
+# Via curl (local):
+curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash
+```
+
+**What it adds to config.json:**
+
+```json
+[
+  {"percent": 50, "level": "memory-50", "message": "Context at {percentage}% — MEMORY CHECKPOINT (50%): Write your initial session memory log now..."},
+  {"percent": 65, "level": "memory-65", "message": "Context at {percentage}% — MEMORY UPDATE (65%): Append an update to your session memory log..."},
+  {"percent": 80, "level": "memory-80", "message": "Context at {percentage}% ({remaining}% remaining) — MEMORY UPDATE (80%): Append a final update..."}
+]
+```
+
+These thresholds are prepended to any existing thresholds.
+
+**Memory log format** (Claude writes these):
+```markdown
+---
+date: YYYY-MM-DD
+session_id: abc12345
+context_at_log: 50%
+---
+
+## Current Work
+## Completed This Session
+## Key Decisions
+## Files Modified
+## In Progress
+## Next Steps
+## Notes
+```
+
+Updates are appended with `---\n*Updated at X%*` separators.
+
+**For ccstatusline users:** The simple-session-memory template works seamlessly alongside ccstatusline. No additional integration needed — just ensure cc-context-awareness is running via the statusline wrapper (see [StatusLine conflicts](#statusline-conflicts)).
 
 ## Common ANSI Color Codes
 

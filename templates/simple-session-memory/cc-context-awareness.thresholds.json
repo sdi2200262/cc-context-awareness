@@ -1,0 +1,17 @@
+[
+  {
+    "percent": 50,
+    "level": "memory-50",
+    "message": "Context at {percentage}% — MEMORY CHECKPOINT (50%).\n\nYour session ID is: {session_id}\n\nDo the following now:\n1. Check .claude/memory/ for any file with 'session_id: {session_id}' in its YAML frontmatter. If found, that is your log for this session — skip to step 3.\n2. If no such file exists: read .claude/memory/.session-count (a plain integer, treat as 0 if missing), add 1, zero-pad to 3 digits (e.g. 003), and write that number back to .claude/memory/.session-count. Create .claude/memory/session-YYYY-MM-DD-NNN.md with today's date and that counter.\n3. Write or update the log with these sections (YAML frontmatter required at top):\n---\ndate: YYYY-MM-DD\nsession_id: {session_id}\ncontext_at_log: {percentage}%\n---\n\n## Current Work\n[What task or project you are working on and its current state]\n\n## Completed This Session\n[What was accomplished — specific files, features, fixes]\n\n## Key Decisions\n[Important technical choices made and why]\n\n## Files Modified\n[Key files created or changed with brief descriptions]\n\n## In Progress\n[Anything started but not finished]\n\n## Next Steps\n[Specific actions to take next session — enough to continue immediately]\n\n## Notes\n[User preferences, known issues, environment details, other context]\n4. Update .claude/memory/index.md — add or update the row for this session. If the file does not exist, create it. Format:\n# Session Memory Index\n\n| File | Date | Summary |\n|------|------|---------|\n| <filename> | <date> | <one-sentence summary of current work> |"
+  },
+  {
+    "percent": 65,
+    "level": "memory-65",
+    "message": "Context at {percentage}% — MEMORY UPDATE (65%).\n\nYour session ID is: {session_id}\n\nFind your session log in .claude/memory/ — it is the file containing 'session_id: {session_id}' in its frontmatter. Append the following to it:\n\n---\n*Updated at {percentage}% context*\n\n[Update 'In Progress' and 'Next Steps' to reflect current state. Add any new decisions or files modified since the last checkpoint.]"
+  },
+  {
+    "percent": 80,
+    "level": "memory-80",
+    "message": "Context at {percentage}% ({remaining}% remaining) — FINAL MEMORY UPDATE (80%). Compaction may happen soon.\n\nYour session ID is: {session_id}\n\nFind your session log in .claude/memory/ — the file with 'session_id: {session_id}' in its frontmatter. Append:\n\n---\n*Final update at {percentage}% — compaction likely imminent*\n\n[Complete current status. Make 'Next Steps' highly specific — write as if handing off to someone who has never seen this session. Include exact file paths, function names, and what state things are in.]\n\nThen inform the user that context is at {percentage}% and suggest /compact when convenient."
+  }
+]

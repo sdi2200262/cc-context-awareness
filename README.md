@@ -121,6 +121,8 @@ Point your `settings.json` at the wrapper:
 {"statusLine": {"type": "command", "command": "~/.claude/statusline-wrapper.sh"}}
 ```
 
+**ccstatusline users:** If you use [ccstatusline](https://github.com/sirmalloc/ccstatusline), replace `/path/to/other/statusline.sh` with `bunx ccstatusline@latest` (or `npx ccstatusline@latest`). Since ccstatusline already has a `ContextPercentage` widget, you can hide the cc-context-awareness bar by redirecting its output: `echo "$INPUT" | ~/.claude/cc-context-awareness/context-awareness-statusline.sh > /dev/null`. This keeps the flag-writing active without duplicating the context display.
+
 **Option 2: Merge**
 
 Copy the flag-writing logic from our statusline script into yours. The critical part is writing to `/tmp/.cc-ctx-trigger-{session_id}` when thresholds are crossed — the hook reads this file.
@@ -319,6 +321,35 @@ Which Claude Code hook event triggers the context injection. Changing requires r
 #### `flag_dir` (string)
 
 Directory for flag files. Default: `"/tmp"`.
+
+</details>
+
+## Templates
+
+<details>
+
+Ready-to-use configurations for common cc-context-awareness use cases. Each template adds hooks and config on top of a base cc-context-awareness install.
+
+### simple-session-memory
+
+An automated session memory system for single-agent sessions. Claude writes incremental memory logs at 50%, 65%, and 80% context usage, and reads them back after compaction to restore context.
+
+```
+50% context  →  writes initial session log
+65% context  →  appends progress update
+80% context  →  appends final update + suggests /compact
+auto-compact →  memory log loaded as context after compaction
+stop         →  ensures memory is written before ending
+every 5 logs →  archives into a compressed summary
+```
+
+```bash
+# Requires cc-context-awareness to be installed first
+./templates/simple-session-memory/install.sh           # local
+./templates/simple-session-memory/install.sh --global  # global
+```
+
+See [`templates/simple-session-memory/README.md`](templates/simple-session-memory/README.md) for full details.
 
 </details>
 

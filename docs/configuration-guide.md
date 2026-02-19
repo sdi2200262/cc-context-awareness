@@ -19,11 +19,51 @@ Read the current config before making changes. Use targeted edits — don't over
 
 ### StatusLine conflicts
 
-If another tool (e.g. [ccstatusline](https://github.com/sirmalloc/ccstatusline)) is using the statusLine slot, cc-context-awareness can **wrap** or **merge** with it. The statusline script writes a flag file that the hook reads — this bridge must be preserved for warnings to fire.
+If another tool is using the `statusLine` slot, cc-context-awareness can **wrap** or **merge** with it. The statusline script writes a flag file that the hook reads — this bridge must be preserved for warnings to fire.
+
+#### ccstatusline (most common conflict)
+
+[ccstatusline](https://github.com/sirmalloc/ccstatusline) is a popular status line formatter for Claude Code. If you have it installed, your `settings.json` will have a `statusLine` entry like `"bunx ccstatusline@latest"` or `"npx ccstatusline@latest"`.
+
+**Step 1:** Create a wrapper at `~/.claude/statusline-wrapper.sh`:
+
+```bash
+#!/usr/bin/env bash
+# Runs ccstatusline (display) then cc-context-awareness (flag writing)
+INPUT=$(cat)
+echo "$INPUT" | bunx ccstatusline@latest   # replace with npx if you use npm
+echo "$INPUT" | ~/.claude/cc-context-awareness/context-awareness-statusline.sh
+```
+
+Make it executable: `chmod +x ~/.claude/statusline-wrapper.sh`
+
+**Step 2:** Update `~/.claude/settings.json`:
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/statusline-wrapper.sh"
+  }
+}
+```
+
+**Hiding the cc-context-awareness bar:** ccstatusline already has a `ContextPercentage` widget. To avoid a duplicate bar, redirect cc-context-awareness output to `/dev/null` in the wrapper — the flag-writing still happens, only the display is suppressed:
+
+```bash
+#!/usr/bin/env bash
+INPUT=$(cat)
+echo "$INPUT" | bunx ccstatusline@latest
+echo "$INPUT" | ~/.claude/cc-context-awareness/context-awareness-statusline.sh > /dev/null
+```
+
+For **local installs**, adjust the path in the wrapper:
+```bash
+echo "$INPUT" | "$(pwd)/.claude/cc-context-awareness/context-awareness-statusline.sh" > /dev/null
+```
+
+#### Other statusline tools
 
 **Option 1: Wrap (recommended)**
-
-Create a wrapper script that calls both statuslines:
 
 ```bash
 #!/usr/bin/env bash
@@ -167,6 +207,26 @@ Set `repeat_mode` to `"every_turn"`.
   "message": "Context at {percentage}%. Before continuing, summarize what you've done so far and what remains, then ask the user if they want to /compact."
 }
 ```
+
+## Templates
+
+Ready-to-use configurations for common use cases. Each template adds hooks and config on top of a base cc-context-awareness install.
+
+### simple-session-memory
+
+Adds an automated session memory system. Claude writes incremental memory logs at 50%, 65%, and 80% context usage, and reads the log back after auto-compaction to restore context.
+
+**Install** (requires cc-context-awareness already installed):
+```bash
+# From cloned repo:
+./templates/simple-session-memory/install.sh           # local
+./templates/simple-session-memory/install.sh --global  # global
+
+# Via curl:
+curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash
+```
+
+See `templates/simple-session-memory/README.md` for full details, memory log format, and archival behavior.
 
 ## Common ANSI Color Codes
 
