@@ -14,7 +14,7 @@ Session memory logs are stored in `.claude/memory/` with this naming convention:
 session-YYYY-MM-DD-NNN.md
 ```
 
-Where `NNN` is a global counter (001, 002, 003…) tracked in `.claude/memory/.session-count`. The counter increments across all sessions regardless of date. The session ID is stored in the frontmatter, not the filename.
+Where `NNN` is derived by counting existing `session-*.md` files directly in `.claude/memory/` (not in `archive/`) and adding 1, zero-padded to 3 digits. The session ID is stored in the frontmatter, not the filename.
 
 ## When to Write Memory
 
@@ -22,14 +22,12 @@ The cc-context-awareness system injects reminders at 50%, 65%, and 80% context u
 
 - **First reminder (50%)**: Check `.claude/memory/` for a file with `session_id: <your session ID>` in its frontmatter. If none exists, create a new one using the counter. Also update `index.md`.
 - **Later reminders (65%, 80%)**: Find your existing log for this session and append to it.
-- **On stop**: If no log exists for this session, you will be asked to write one before stopping.
 
 ## Creating a New Log
 
-1. Read `.claude/memory/.session-count` (treat as 0 if missing)
+1. Count existing `session-*.md` files directly in `.claude/memory/` (not in `archive/`)
 2. Add 1, zero-pad to 3 digits (e.g. `007`)
-3. Write that number back to `.claude/memory/.session-count`
-4. Create `.claude/memory/session-YYYY-MM-DD-NNN.md`
+3. Create `.claude/memory/session-YYYY-MM-DD-NNN.md`
 
 ## Memory Log Format
 
@@ -97,7 +95,7 @@ When resuming after compaction, a hook automatically loads the most recent sessi
 
 ## Archival
 
-When 5 session logs accumulate, a subagent automatically archives all but the most recent log into `.claude/memory/archive/`. The newest session log is always preserved so the previous session's context is never lost. You do not need to manage this manually.
+When 5 session logs accumulate, a hook injects archival instructions at the start of the next post-compaction session. When you see these instructions, launch a subagent to synthesize the older logs into `.claude/memory/archive/`. The newest session log is always preserved — never archived — so the previous session's context is never lost.
 
 ## Integration with Claude Code Auto-Memory
 

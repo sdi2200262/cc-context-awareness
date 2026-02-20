@@ -21,7 +21,8 @@ while [ $# -gt 0 ]; do
     -h|--help)
       echo "Usage: install.sh [OPTIONS]"
       echo ""
-      echo "Installs the simple-session-memory template for cc-context-awareness."
+      echo "Installs the simple-session-memory template."
+      echo "cc-context-awareness is installed automatically if not already present."
       echo ""
       echo "Options:"
       echo "  --global         Install globally to ~/.claude/ instead of locally"
@@ -29,7 +30,6 @@ while [ $# -gt 0 ]; do
       echo "  -h, --help       Show this help"
       echo ""
       echo "Requirements:"
-      echo "  - cc-context-awareness must already be installed"
       echo "  - jq"
       exit 0
       ;;
@@ -66,25 +66,49 @@ else
   SETTINGS_FILE="$CLAUDE_DIR/settings.local.json"
 fi
 
-# ── Verify cc-context-awareness is installed ─────────────────────────────────
+# ── Detect script location (needed for local source and repo-relative paths) ──
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+
+# ── Ensure cc-context-awareness is installed ─────────────────────────────────
+
+MAIN_INSTALL_SCRIPT="$SCRIPT_DIR/../../install.sh"
+MAIN_INSTALL_URL="https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/install.sh"
 
 if [ ! -f "$CC_CONTEXT_DIR/config.json" ]; then
-  echo "Error: cc-context-awareness not found at $CC_CONTEXT_DIR"
+  echo "cc-context-awareness not found — installing it automatically..."
   echo ""
-  echo "Install cc-context-awareness first:"
-  if [ "$GLOBAL" = true ]; then
-    echo "  curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/install.sh | bash -s -- --global"
+
+  if [ -f "$MAIN_INSTALL_SCRIPT" ]; then
+    if [ "$GLOBAL" = true ]; then
+      "$MAIN_INSTALL_SCRIPT" --global
+    else
+      "$MAIN_INSTALL_SCRIPT"
+    fi
   else
-    echo "  curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/install.sh | bash"
+    if [ "$GLOBAL" = true ]; then
+      curl -fsSL "$MAIN_INSTALL_URL" | bash -s -- --global
+    else
+      curl -fsSL "$MAIN_INSTALL_URL" | bash
+    fi
   fi
-  exit 1
+
+  echo ""
+
+  if [ ! -f "$CC_CONTEXT_DIR/config.json" ]; then
+    echo "Error: cc-context-awareness installation failed. Install it manually and re-run:"
+    if [ "$GLOBAL" = true ]; then
+      echo "  curl -fsSL $MAIN_INSTALL_URL | bash -s -- --global"
+    else
+      echo "  curl -fsSL $MAIN_INSTALL_URL | bash"
+    fi
+    exit 1
+  fi
 fi
 
 # ── Detect source mode ───────────────────────────────────────────────────────
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-
-if [ -d "$SCRIPT_DIR/hooks" ] && [ -f "$SCRIPT_DIR/hooks/stop-check.sh" ]; then
+if [ -d "$SCRIPT_DIR/hooks" ] && [ -f "$SCRIPT_DIR/hooks/session-start.sh" ]; then
   SOURCE_MODE="local"
 else
   SOURCE_MODE="remote"
@@ -110,10 +134,10 @@ echo "Installing simple-session-memory ($INSTALL_MODE)..."
 mkdir -p "$HOOKS_DIR"
 
 get_file "hooks/session-start.sh" "$HOOKS_DIR/session-start.sh"
-get_file "hooks/stop-check.sh"    "$HOOKS_DIR/stop-check.sh"
+get_file "hooks/archival.sh"      "$HOOKS_DIR/archival.sh"
 
 chmod +x "$HOOKS_DIR/session-start.sh"
-chmod +x "$HOOKS_DIR/stop-check.sh"
+chmod +x "$HOOKS_DIR/archival.sh"
 
 echo "  Installed hooks to $HOOKS_DIR"
 
@@ -158,22 +182,13 @@ fi
 # ── Patch settings.json with hooks ───────────────────────────────────────────
 
 SESSION_START_CMD="$HOOKS_DIR/session-start.sh"
-STOP_CHECK_CMD="$HOOKS_DIR/stop-check.sh"
+ARCHIVAL_CMD="$HOOKS_DIR/archival.sh"
 
 SESSION_START_ENTRY="$(jq -n --arg cmd "$SESSION_START_CMD" \
   '{"matcher": "compact", "hooks": [{"type": "command", "command": $cmd}]}')"
 
-STOP_ENTRY="$(jq -n --arg cmd "$STOP_CHECK_CMD" \
-  '{"matcher": "", "hooks": [{"type": "command", "command": $cmd}]}')"
-
-ARCHIVE_AGENT_ENTRY="$(jq -n '{
-  "matcher": "",
-  "hooks": [{
-    "type": "agent",
-    "prompt": "MEMORY ARCHIVAL TASK: Check if the file .claude/memory/.archive-needed exists. If it does NOT exist, return immediately with {\"ok\": true}. If it DOES exist: 1) List all session memory files in .claude/memory/ matching session-*.md (NOT in the archive/ subdirectory). Sort them by filename ascending — the highest counter (last alphabetically) is the most recent. 2) If there are fewer than 5, delete .archive-needed and return {\"ok\": true}. 3) If there are 5 or more: a) Identify the files to archive: ALL files EXCEPT the most recent one (highest counter). Keep the newest file intact — never delete it. b) Create .claude/memory/archive/ if it does not exist. c) Read the files to archive (oldest first). d) Write a consolidated archive to .claude/memory/archive/archive-YYYY-MM-DD.md (use today'\''s date) with this structure: a header, a table of contents listing each source log, then each log separated by horizontal rules and a heading with the source filename. Make the archive a coherent synthesis — preserve key decisions, outcomes, and any information useful for future context. e) Update .claude/memory/index.md: move the archived sessions from the main table to the Archives section (create that section if it does not exist), and add a row for the new archive file showing the date range it covers. If index.md does not exist, create it with an Archives section only. f) Delete the archived source session-*.md files (NOT the most recent one). g) Delete .claude/memory/.archive-needed. Return {\"ok\": true}.",
-    "timeout": 180
-  }]
-}')"
+ARCHIVAL_ENTRY="$(jq -n --arg cmd "$ARCHIVAL_CMD" \
+  '{"matcher": "compact", "hooks": [{"type": "command", "command": $cmd}]}')"
 
 SETTINGS_FILENAME="$(basename "$SETTINGS_FILE")"
 
@@ -181,12 +196,10 @@ if [ ! -f "$SETTINGS_FILE" ]; then
   mkdir -p "$(dirname "$SETTINGS_FILE")"
   jq -n \
     --argjson sessionstart "$SESSION_START_ENTRY" \
-    --argjson stop "$STOP_ENTRY" \
-    --argjson archive "$ARCHIVE_AGENT_ENTRY" \
+    --argjson archival "$ARCHIVAL_ENTRY" \
     '{
       "hooks": {
-        "SessionStart": [$sessionstart],
-        "Stop": [$stop, $archive]
+        "SessionStart": [$sessionstart, $archival]
       }
     }' > "$SETTINGS_FILE"
   echo "  Created $SETTINGS_FILENAME with simple-session-memory hooks"
@@ -218,33 +231,20 @@ else
     fi
   }
 
-  # SessionStart (compact)
+  # SessionStart (session-start.sh — memory restore)
   if [ "$(has_command "$SETTINGS" "SessionStart" "$SESSION_START_CMD")" != "true" ]; then
     SETTINGS="$(append_hook "$SETTINGS" "SessionStart" "$SESSION_START_ENTRY")"
     echo "  Added SessionStart hook (memory restore after compaction)"
   else
-    echo "  SessionStart hook already registered (skipped)"
+    echo "  SessionStart memory-restore hook already registered (skipped)"
   fi
 
-  # Stop (memory check)
-  if [ "$(has_command "$SETTINGS" "Stop" "$STOP_CHECK_CMD")" != "true" ]; then
-    SETTINGS="$(append_hook "$SETTINGS" "Stop" "$STOP_ENTRY")"
-    echo "  Added Stop hook (memory write enforcement)"
+  # SessionStart (archival.sh — archival check)
+  if [ "$(has_command "$SETTINGS" "SessionStart" "$ARCHIVAL_CMD")" != "true" ]; then
+    SETTINGS="$(append_hook "$SETTINGS" "SessionStart" "$ARCHIVAL_ENTRY")"
+    echo "  Added SessionStart hook (archival check)"
   else
-    echo "  Stop hook already registered (skipped)"
-  fi
-
-  # Stop (archive agent) — check by prompt snippet
-  HAS_ARCHIVE="$(echo "$SETTINGS" | jq '
-    (.hooks.Stop // []) |
-    any(.hooks[]?.type == "agent" and (.hooks[]?.prompt | test("MEMORY ARCHIVAL TASK")))
-  ' 2>/dev/null || echo "false")"
-
-  if [ "$HAS_ARCHIVE" != "true" ]; then
-    SETTINGS="$(append_hook "$SETTINGS" "Stop" "$ARCHIVE_AGENT_ENTRY")"
-    echo "  Added Stop agent hook (session archival)"
-  else
-    echo "  Archive agent hook already registered (skipped)"
+    echo "  SessionStart archival hook already registered (skipped)"
   fi
 
   echo "$SETTINGS" > "$SETTINGS_FILE"
@@ -298,12 +298,11 @@ echo "  Config:   $CONFIG_FILE (memory thresholds added)"
 echo "  Settings: $SETTINGS_FILE"
 echo ""
 echo "  How it works:"
-echo "    50% context → Claude writes initial session memory log"
-echo "    65% context → Claude appends progress update"
-echo "    80% context → Claude appends final update + suggests /compact"
-echo "    Auto-compact → After compaction, memory log is loaded as context"
-echo "    On stop    → If no log written this session, Claude writes one first"
-echo "    Every 5 sessions → Logs archived to $MEMORY_DIR/archive/"
+echo "    50% context  → Claude writes initial session memory log"
+echo "    65% context  → Claude appends progress update"
+echo "    80% context  → Claude appends final update + suggests /compact"
+echo "    Auto-compact → Memory log loaded as context after compaction"
+echo "    Every 5 logs → Logs archived into $MEMORY_DIR/archive/"
 echo ""
 echo "  Restart Claude Code to activate."
 echo ""

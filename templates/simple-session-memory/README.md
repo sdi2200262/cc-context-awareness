@@ -12,11 +12,10 @@ Turns cc-context-awareness threshold warnings into an automated session journal.
 65% context  →  Claude appends a progress update
 80% context  →  Claude appends final update + suggests /compact
 Auto-compact →  After resuming, memory log is loaded as context
-Session stop →  If no log written yet, Claude writes one before stopping
-Every 5 logs →  A subagent compresses them into an archive
+Every 5 logs →  A subagent synthesizes them into an archive
 ```
 
-Memory logs are named `.claude/memory/session-YYYY-MM-DD-NNN.md` where `NNN` is a global counter (001, 002…). The session ID is stored in the YAML frontmatter, not the filename — this makes logs easy to sort and archive without encoding volatile identifiers into paths. Each log captures:
+Memory logs are named `.claude/memory/session-YYYY-MM-DD-NNN.md` where `NNN` is derived by counting existing logs in `.claude/memory/` at write time. The session ID is stored in the YAML frontmatter, not the filename — this makes logs easy to sort and archive without encoding volatile identifiers into paths. Each log captures:
 - Current task and project state
 - Work completed this session
 - Key decisions made
@@ -27,29 +26,28 @@ Memory logs are named `.claude/memory/session-YYYY-MM-DD-NNN.md` where `NNN` is 
 
 ## Requirements
 
-- [cc-context-awareness](https://github.com/sdi2200262/cc-context-awareness) installed (local or global)
 - `jq`
+- cc-context-awareness is **installed automatically** if not already present
 
 ## Install
 
-**From the cc-context-awareness repo:**
+**Via curl (local — this project only):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash
+```
 
+**Via curl (global — all projects):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash -s -- --global
+```
+
+**From a cloned repo:**
 ```bash
 # Local install (this project only)
 ./templates/simple-session-memory/install.sh
 
 # Global install (all projects)
 ./templates/simple-session-memory/install.sh --global
-```
-
-**Via curl (local):**
-```bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash
-```
-
-**Via curl (global):**
-```bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash -s -- --global
 ```
 
 ### Install Options
@@ -63,11 +61,10 @@ curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/mai
 
 ### Hooks added to settings (local or global)
 
-| Hook event | Matcher | Purpose |
-|------------|---------|---------|
-| `SessionStart` | `compact` | After compaction: loads most recent memory log (or archive) as context |
-| `Stop` | (all) | Ensures memory is written before Claude stops |
-| `Stop` (agent) | (all) | Archives 5+ session logs when they accumulate |
+| Hook event | Matcher | Script | Purpose |
+|------------|---------|--------|---------|
+| `SessionStart` | `compact` | `session-start.sh` | After compaction: loads most recent memory log (or archive) as context |
+| `SessionStart` | `compact` | `archival.sh` | Counts session logs; injects archival instructions if ≥ 5 accumulate |
 
 ### cc-context-awareness config changes
 
@@ -91,7 +88,7 @@ These are prepended to your existing thresholds so memory writes happen before y
   simple-session-memory/
     hooks/
       session-start.sh
-      stop-check.sh
+      archival.sh
 CLAUDE.md                           # Instructions appended (optional)
 ```
 
@@ -158,28 +155,38 @@ The table stays at the top; the Archives section is managed by the archival suba
 
 ## Archival
 
-When 5 session logs accumulate in `.claude/memory/`, a Claude subagent automatically:
+When 5 session logs accumulate in `.claude/memory/`, `archival.sh` fires at the start of the next post-compaction session (after `session-start.sh` restores context). It injects instructions telling Claude to launch a subagent that:
+
 1. Archives all logs **except the most recent** (the newest is always preserved)
 2. Creates a synthesized archive at `.claude/memory/archive/archive-YYYY-MM-DD.md`
 3. Updates `index.md` — moves archived entries to the Archives section
 4. Deletes the archived source logs
 
-This means after archival there is always exactly one individual session log remaining — the previous session — so there is never a context gap between sessions. Archives preserve key decisions, outcomes, and context useful for future sessions.
+After archival there is always exactly one individual session log remaining — the previous session — so there is never a context gap between sessions. Archives preserve key decisions, outcomes, and context useful for future sessions.
 
 ## Design Notes
 
 **Why threshold-triggered writes instead of hooks?** Claude Code hooks can run bash scripts but not LLM prompts at `PreCompact` — only `Stop` and a few others support agent/prompt hooks. Since cc-context-awareness already injects instructions into Claude's context at configurable thresholds, it's the natural mechanism for triggering semantic memory writes.
 
-**Why does the Stop hook block Claude?** The first time Claude stops in a session without a memory log, the Stop hook returns `decision: "block"` with instructions. Claude writes the log then stops again — the second stop has `stop_hook_active: true`, so the hook allows it through. This guarantees at least one log per session even in short sessions that never hit 50% context.
+**Why not use a Stop hook?** Stop hooks that block Claude (returning `decision: "block"`) cause problems in non-interactive permission modes — they stall the session waiting for a response that won't come. Instead, the 50%/65%/80% threshold reminders give Claude plenty of opportunity to write a log before any compaction, and the Stop hook is not needed.
 
-**Why a subagent for archival?** Concatenating 5 logs is easy with bash, but a subagent can synthesize them — dropping ephemeral details and preserving the signal. The archive is meant to be readable months later, not just a dump.
+**Why a subagent for archival, not bash concatenation?** Concatenating 5 logs is trivial in bash, but a subagent can *synthesize* them — dropping ephemeral details and preserving the signal. The archive is meant to be readable months later, not just a dump. `archival.sh` does the cheap count check in pure bash with zero token cost; the subagent only runs when actually needed.
 
 **Does this conflict with Claude Code's native auto-memory (`MEMORY.md`)?** No — they occupy entirely different namespaces. Native auto-memory lives at `~/.claude/projects/<project>/memory/MEMORY.md` (outside the repo) and is auto-loaded at every session start. Session logs live at `.claude/memory/` (inside the repo) and are loaded by hooks or on-demand. The two are complementary: MEMORY.md stores stable cross-session knowledge (preferences, architecture decisions); session logs store ephemeral per-session work history. If you use both, a one-line pointer in MEMORY.md to `index.md` gives every fresh session awareness of the session log system.
 
 ## Uninstall
 
-To remove the hooks from settings, manually delete the entries for `session-start.sh` and `stop-check.sh` from `settings.json` (or `settings.local.json`).
+```bash
+# Local uninstall
+./templates/simple-session-memory/uninstall.sh
 
-To remove the memory thresholds from cc-context-awareness config, delete the entries with levels `memory-50`, `memory-65`, and `memory-80` from `config.json`.
+# Global uninstall
+./templates/simple-session-memory/uninstall.sh --global
+```
 
-Memory logs themselves are not deleted on uninstall — they remain at `.claude/memory/`.
+Or via curl:
+```bash
+curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/uninstall.sh | bash
+```
+
+The uninstaller removes hooks, cleans up settings, and removes the `memory-50`/`memory-65`/`memory-80` thresholds from cc-context-awareness config. Memory logs at `.claude/memory/` are preserved.
