@@ -143,40 +143,58 @@ echo "  Installed hooks to $HOOKS_DIR"
 
 # ── Patch cc-context-awareness config with memory thresholds ─────────────────
 
+THRESHOLDS_TMP=""
+cleanup_thresholds_tmp() {
+  if [ -n "$THRESHOLDS_TMP" ] && [ -f "$THRESHOLDS_TMP" ]; then
+    rm -f "$THRESHOLDS_TMP"
+  fi
+}
+trap cleanup_thresholds_tmp EXIT
+
 THRESHOLDS_FILE="$SCRIPT_DIR/cc-context-awareness.thresholds.json"
 if [ ! -f "$THRESHOLDS_FILE" ] && [ "$SOURCE_MODE" = "remote" ]; then
-  THRESHOLDS_FILE="/tmp/simple-session-memory-thresholds.json"
-  curl -fsSL "${REPO_URL}/cc-context-awareness.thresholds.json" -o "$THRESHOLDS_FILE" 2>/dev/null
+  THRESHOLDS_TMP="$(mktemp /tmp/simple-session-memory-thresholds.XXXXXX.json)"
+  if ! curl -fsSL "${REPO_URL}/cc-context-awareness.thresholds.json" -o "$THRESHOLDS_TMP"; then
+    echo "  Error: Failed to download thresholds configuration from GitHub"
+    echo "  Check your network connection and try again"
+    exit 1
+  fi
+  THRESHOLDS_FILE="$THRESHOLDS_TMP"
 fi
 
-if [ -f "$THRESHOLDS_FILE" ]; then
-  # Memory threshold levels to check for (avoid duplicate patching)
-  MEMORY_LEVELS=("memory-50" "memory-65" "memory-80")
+if [ ! -f "$THRESHOLDS_FILE" ]; then
+  echo "  Error: Thresholds configuration is required but unavailable"
+  exit 1
+fi
 
-  CURRENT_CONFIG="$(cat "$CONFIG_FILE")"
+if ! NEW_THRESHOLDS="$(jq -c . "$THRESHOLDS_FILE" 2>/dev/null)"; then
+  echo "  Error: Thresholds configuration is invalid JSON"
+  exit 1
+fi
 
-  # Check if any memory threshold already exists
-  ALREADY_PATCHED=false
-  for level in "${MEMORY_LEVELS[@]}"; do
-    if echo "$CURRENT_CONFIG" | jq -r '.thresholds[].level' 2>/dev/null | grep -q "^${level}$"; then
-      ALREADY_PATCHED=true
-      break
-    fi
-  done
+if ! echo "$NEW_THRESHOLDS" | jq -e 'type == "array" and length > 0 and all(.[]; has("level"))' >/dev/null 2>&1; then
+  echo "  Error: Thresholds configuration format is invalid"
+  exit 1
+fi
 
-  if [ "$ALREADY_PATCHED" = true ]; then
-    echo "  cc-context-awareness config: memory thresholds already present (skipped)"
-  else
-    NEW_THRESHOLDS="$(cat "$THRESHOLDS_FILE")"
-    UPDATED_CONFIG="$(echo "$CURRENT_CONFIG" | jq --argjson new "$NEW_THRESHOLDS" '
-      .thresholds = ($new + .thresholds)
-    ')"
-    echo "$UPDATED_CONFIG" > "$CONFIG_FILE"
-    echo "  Patched cc-context-awareness config: added memory thresholds at 50%, 65%, 80%"
-  fi
+CURRENT_CONFIG="$(cat "$CONFIG_FILE")"
+UPDATED_CONFIG="$(echo "$CURRENT_CONFIG" | jq --argjson new "$NEW_THRESHOLDS" '
+  ($new | map(.level)) as $new_levels
+  | .thresholds = (
+      $new
+      + ((.thresholds // [])
+          | map(select((.level // "") as $lvl | ($new_levels | index($lvl) | not))))
+    )
+')"
+
+CURRENT_NORMALIZED="$(echo "$CURRENT_CONFIG" | jq -cS .)"
+UPDATED_NORMALIZED="$(echo "$UPDATED_CONFIG" | jq -cS .)"
+
+if [ "$CURRENT_NORMALIZED" != "$UPDATED_NORMALIZED" ]; then
+  echo "$UPDATED_CONFIG" > "$CONFIG_FILE"
+  echo "  Patched cc-context-awareness config: upserted memory thresholds at 50%, 65%, 80%"
 else
-  echo "  Warning: Could not find threshold config — patch cc-context-awareness config manually"
-  echo "    Add thresholds from: templates/simple-session-memory/cc-context-awareness.thresholds.json"
+  echo "  cc-context-awareness config: memory thresholds already up to date"
 fi
 
 # ── Patch settings.json with hooks ───────────────────────────────────────────
