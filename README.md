@@ -1,6 +1,6 @@
 # cc-context-awareness
 
-Deterministic context awareness for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Enhances the built-in context tracking with configurable thresholds and custom instruction injection — trigger workflows, save state, or steer Claude's behavior based on live usage.
+Tell Claude what to do based on how much context it has used. Configurable thresholds inject custom instructions into [Claude Code](https://docs.anthropic.com/en/docs/claude-code) conversations at specific usage levels — trigger pre-compaction workflows, save session state, or change behavior before context runs out.
 
 <p align="center">
   <img src="docs/diagram.svg" alt="cc-context-awareness architecture diagram" width="800"/>
@@ -63,18 +63,7 @@ See [Templates](#templates) for details.
 
 ## What It Does
 
-**Context-aware steering** — When context usage crosses a configurable threshold, custom instructions are injected directly into Claude's conversation. Use this to trigger pre-compaction workflows, save session state, change behavior, or prompt Claude to wrap up before it's too late.
-
-**Visual feedback** (optional) — A status line shows live context usage at the bottom of your Claude Code session:
-
-```
-context ████████████░░░░░░░░ 60%        (normal — white)
-context ████████████████░░░░ 82%        (warning — red)
-```
-
-## Enhancing Claude Code's Built-in Mechanism
-
-Claude Code has built-in context awareness — token counts after each tool call, a UI meter, and a warning at 20% remaining. But it's hardcoded. You can't change the threshold, add multiple tiers, or inject custom instructions.
+Claude Code has built-in context awareness, but it's hardcoded — a single warning at 20% remaining that you can't change. cc-context-awareness makes it configurable: set thresholds at any percentage, inject any instruction, and trigger workflows automatically. Configurable thresholds are a [commonly](https://github.com/anthropics/claude-code/issues/14258) [requested](https://github.com/anthropics/claude-code/issues/11819) [feature](https://github.com/anthropics/claude-code/issues/6621) not yet available natively.
 
 | | Claude Code built-in | cc-context-awareness |
 |---|---|---|
@@ -83,7 +72,12 @@ Claude Code has built-in context awareness — token counts after each tool call
 | Custom messages | No | Yes — inject any instruction |
 | Trigger workflows | No | Yes — pre-compaction saves, behavioral changes |
 
-Configurable thresholds are a [commonly](https://github.com/anthropics/claude-code/issues/14258) [requested](https://github.com/anthropics/claude-code/issues/11819) [feature](https://github.com/anthropics/claude-code/issues/6621) not yet available natively.
+An optional status line shows live context usage at the bottom of your session:
+
+```
+context ████████████░░░░░░░░ 60%        (normal — white)
+context ████████████████░░░░ 82%        (warning — red)
+```
 
 ## How It Works
 
@@ -97,12 +91,7 @@ This happens inside the agentic loop — Claude receives your custom instruction
 
 ### Compaction handling
 
-When `/compact` (or auto-compaction) fires, the `session_id` stays the same but context usage drops sharply. Without cleanup, a stale trigger file from before compaction would inject an outdated high-usage warning into the fresh post-compaction agent.
-
-Two mechanisms prevent this:
-
-1. **Reset handler** — a `SessionStart` hook (matcher: `compact`) deletes both the trigger and fired-tier tracking files on the compaction boundary
-2. **Compaction marker** — the reset handler plants a short-lived marker file (`.cc-ctx-compacted-{session_id}`). If a late-running statusline (from the last pre-compaction message) tries to re-create stale flag files after the reset handler already cleaned up, the statusline sees the marker, resets its state, and consumes the marker instead of writing stale data
+After `/compact` or auto-compaction, the `session_id` stays the same but context drops sharply. A `SessionStart` reset handler clears stale flag files and plants a compaction marker — if a late-running statusline tries to re-create flags with pre-compaction data, it sees the marker and resets instead.
 
 ### Hook event options
 
@@ -137,41 +126,23 @@ Point your `settings.json` at the wrapper:
 {"statusLine": {"type": "command", "command": "~/.claude/statusline-wrapper.sh"}}
 ```
 
-**ccstatusline users:** If you use [ccstatusline](https://github.com/sirmalloc/ccstatusline), replace `/path/to/other/statusline.sh` with `bunx ccstatusline@latest` (or `npx ccstatusline@latest`). Since ccstatusline already has a `ContextPercentage` widget, you can hide the cc-context-awareness bar by redirecting its output: `echo "$INPUT" | ~/.claude/cc-context-awareness/context-awareness-statusline.sh > /dev/null`. This keeps the flag-writing active without duplicating the context display.
+**[ccstatusline](https://github.com/sirmalloc/ccstatusline) users:** Use `bunx ccstatusline@latest` as the other statusline. To avoid a duplicate context display, redirect ours: `echo "$INPUT" | ~/.claude/cc-context-awareness/context-awareness-statusline.sh > /dev/null` — this keeps the flag-writing active without showing the bar.
 
-**Option 2: Merge**
+**Option 2: Merge** — Copy the flag-writing logic into your own statusline. The critical part is writing to `/tmp/.cc-ctx-trigger-{session_id}` when thresholds are crossed.
 
-Copy the flag-writing logic from our statusline script into yours. The critical part is writing to `/tmp/.cc-ctx-trigger-{session_id}` when thresholds are crossed — the hook reads this file.
+**Installer behavior:** No existing statusLine → adds ours. Another tool's statusLine → prints merge instructions. `--overwrite` → replaces it.
 
-**Installer behavior:**
+### Hooks and settings
 
-- **No existing statusLine**: Adds ours automatically
-- **Another tool's statusLine**: Prints merge instructions, does **not** modify `settings.json`
-- **`--overwrite` flag**: Replaces the existing statusLine with ours
-
-### Hooks
-
-Hooks are **additive** — Claude Code supports multiple hook entries per event. The installer:
-
-- Appends our hook to any existing hook array (never replaces other hooks)
-- Checks for duplicates before appending (safe to re-run)
-- On uninstall, removes only our entry and leaves others intact
-
-### Settings.json validation
-
-If `settings.json` exists but contains invalid JSON, the installer will:
-
-- Print an error message
-- Still install the scripts (so you can fix settings.json and re-run)
-- Exit without modifying the broken file
+Hooks are additive — the installer appends without replacing existing hooks, checks for duplicates, and on uninstall removes only its own entries. If `settings.json` contains invalid JSON, the installer prints an error and skips modification.
 
 ## Templates
 
-Ready-to-use configurations for common cc-context-awareness use cases. Each template installs hooks and config on top of a base cc-context-awareness install — cc-context-awareness is installed automatically if not already present.
+Ready-to-use configurations that install hooks and config on top of cc-context-awareness. Install commands are in [Quick Install](#quick-install) above.
 
 ### simple-session-memory
 
-An automated session memory system for single-agent sessions. Claude writes incremental memory logs at 50%, 65%, and 80% context usage, reads them back after compaction to restore context, and archives old logs automatically via a dedicated custom agent.
+Automated session memory for single-agent sessions. Claude writes incremental memory logs at 50%, 65%, and 80% context usage, reads them back after compaction, and archives old logs via a dedicated custom agent.
 
 ```
 50% context  →  writes initial session log
@@ -181,23 +152,7 @@ auto-compact →  memory log loaded as context after compaction
 every 5 logs →  custom agent archives into a compressed summary
 ```
 
-**Install (local — this project):**
-```bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash
-```
-
-**Install (global — all projects):**
-```bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash -s -- --global
-```
-
-Or from a cloned repo:
-```bash
-./templates/simple-session-memory/install.sh           # local
-./templates/simple-session-memory/install.sh --global  # global
-```
-
-See [`templates/simple-session-memory/README.md`](templates/simple-session-memory/README.md) for full details, memory log format, and design notes.
+See [`templates/simple-session-memory/README.md`](templates/simple-session-memory/README.md) for full details.
 
 ## Use Cases
 
@@ -423,12 +378,10 @@ Re-run the install script. It will update the scripts and guide but preserve you
 
 ## Known Limitations
 
-- **Flag-file bridge delay**: The status line writes the flag after an assistant message, and the hook reads it on the next event. With `PreToolUse` (default), this means the warning fires before the next tool call — minimal delay. With `UserPromptSubmit`, there's a full one-turn delay.
-- **Status line is exclusive**: Claude Code only supports one status line command. See [Handling Conflicts](#handling-conflicts) for how the installer deals with this.
-- **Requires `jq`**: Both scripts depend on `jq` for JSON processing.
-- **Requires bash 3.2+**: The scripts use bash features (arrays, process substitution) available in bash 3.2 and later. This is satisfied by default on macOS and most Linux distributions.
-- **Flag files in `/tmp`**: Flag files are written to `/tmp` by default. They're small and ephemeral, but if `/tmp` is unavailable, change `flag_dir` in the config.
-- **Existing installs need reinstall**: If upgrading from a version without the compaction reset handler, re-run the installer to register the `SessionStart` hook.
+- **One-turn delay**: The statusline writes a flag after each assistant message; the hook reads it on the next event. With `PreToolUse` (default) this is minimal; with `UserPromptSubmit` it's a full turn.
+- **Exclusive status line**: Claude Code supports one `statusLine` command. See [Handling Conflicts](#handling-conflicts).
+- **Requires `jq` and bash 3.2+** (satisfied by default on macOS and most Linux).
+- **Flag files in `/tmp`**: Small and ephemeral. Change `flag_dir` in config if `/tmp` is unavailable.
 
 ## License
 

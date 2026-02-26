@@ -31,24 +31,12 @@ Memory logs are named `.claude/memory/session-YYYY-MM-DD-NNN.md` where `NNN` is 
 
 ## Install
 
-**Via curl (local — this project only):**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash -s -- --global  # global
 ```
 
-**Via curl (global — all projects):**
-```bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash -s -- --global
-```
-
-**From a cloned repo:**
-```bash
-# Local install (this project only)
-./templates/simple-session-memory/install.sh
-
-# Global install (all projects)
-./templates/simple-session-memory/install.sh --global
-```
+Or from a cloned repo: `./templates/simple-session-memory/install.sh` (add `--global` for all projects).
 
 ### Install Options
 
@@ -59,46 +47,27 @@ curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/mai
 
 ## What Gets Installed
 
-### Hooks added to settings (local or global)
+```
+.claude/
+  agents/
+    memory-archiver.md              # Custom archival agent (haiku, acceptEdits)
+  memory/
+    index.md                        # Running index of all sessions
+    archive/                        # Synthesized archives of older sessions
+  simple-session-memory/
+    hooks/
+      session-start.sh              # Loads memory after compaction
+      archival.sh                   # Triggers archival when ≥ 5 logs accumulate
+CLAUDE.md                           # Instructions appended (optional)
+```
 
-| Hook event | Matcher | Script | Purpose |
-|------------|---------|--------|---------|
-| `SessionStart` | `compact` | `session-start.sh` | After compaction: loads most recent memory log (or archive) as context |
-| `SessionStart` | `compact` | `archival.sh` | Counts session logs; injects archival instructions if ≥ 5 accumulate |
-
-### Custom agent installed
-
-| File | Purpose |
-|------|---------|
-| `.claude/agents/memory-archiver.md` | Dedicated agent for archiving session logs — uses haiku model with auto-accept permissions for cost-efficient, zero-friction archival |
-
-### cc-context-awareness config changes
-
-Adds three memory-trigger thresholds to your existing cc-context-awareness config:
+**Thresholds added** to cc-context-awareness config (prepended to your existing ones):
 
 | Threshold | Level | Action |
 |-----------|-------|--------|
 | 50% | `memory-50` | Claude writes initial session log |
 | 65% | `memory-65` | Claude appends progress update |
 | 80% | `memory-80` | Claude appends final update + suggests /compact |
-
-These are prepended to your existing thresholds so memory writes happen before your existing warnings.
-
-### Files created
-
-```
-.claude/
-  agents/
-    memory-archiver.md              # Custom archival agent definition
-  memory/
-    index.md                        # Running index of all sessions (auto-maintained)
-    archive/                        # Synthesized archives of older sessions
-  simple-session-memory/
-    hooks/
-      session-start.sh
-      archival.sh
-CLAUDE.md                           # Instructions appended (optional)
-```
 
 ## Memory Log Format
 
@@ -176,15 +145,13 @@ After archival there is always exactly one individual session log remaining — 
 
 ## Design Notes
 
-**Why threshold-triggered writes instead of hooks?** Claude Code hooks can run bash scripts but not LLM prompts at `PreCompact` — only `Stop` and a few others support agent/prompt hooks. Since cc-context-awareness already injects instructions into Claude's context at configurable thresholds, it's the natural mechanism for triggering semantic memory writes.
+**Why threshold-triggered writes, not hooks?** Claude Code hooks can't run LLM prompts at `PreCompact`. Since cc-context-awareness already injects instructions at configurable thresholds, it's the natural mechanism for triggering memory writes. Stop hooks weren't used because they stall sessions in non-interactive permission modes.
 
-**Why not use a Stop hook?** Stop hooks that block Claude (returning `decision: "block"`) cause problems in non-interactive permission modes — they stall the session waiting for a response that won't come. Instead, the 50%/65%/80% threshold reminders give Claude plenty of opportunity to write a log before any compaction, and the Stop hook is not needed.
+**Why a custom agent for archival, not bash?** Bash can concatenate logs, but an LLM can *synthesize* them — dropping noise and preserving signal. `archival.sh` does the cheap count check in pure bash; the memory-archiver agent (haiku, `acceptEdits`) only runs when needed and avoids the permission errors that generic Task-tool subagents hit when writing to `.claude/`.
 
-**Why a custom agent for archival, not bash concatenation?** Concatenating 5 logs is trivial in bash, but an LLM agent can *synthesize* them — dropping ephemeral details and preserving the signal. The archive is meant to be readable months later, not just a dump. `archival.sh` does the cheap count check in pure bash with zero token cost; the memory-archiver agent only runs when actually needed. It uses the `haiku` model for cost efficiency and `acceptEdits` permission mode to avoid the file-write permission errors that occur with generic Task-tool subagents.
+**Compaction safety:** After compaction, cc-context-awareness uses a compaction marker to prevent late-running statusline updates from re-creating stale trigger files. This protects all thresholds including `memory-50/65/80`.
 
-**What about stale threshold injections after compaction?** After compaction, context drops sharply but the `session_id` stays the same. Without protection, a late-running statusline from the last pre-compaction message could re-create a trigger file with stale percentage data (e.g. "Context at 80%..." when context is actually at 10%). cc-context-awareness handles this with a compaction marker — the reset handler plants a marker that the statusline checks before writing any flags. If the marker is present, the statusline resets its state instead of writing stale data. This protects all thresholds including `memory-50`, `memory-65`, and `memory-80`.
-
-**Does this conflict with Claude Code's native auto-memory (`MEMORY.md`)?** No — they occupy entirely different namespaces. Native auto-memory lives at `~/.claude/projects/<project>/memory/MEMORY.md` (outside the repo) and is auto-loaded at every session start. Session logs live at `.claude/memory/` (inside the repo) and are loaded by hooks or on-demand. The two are complementary: MEMORY.md stores stable cross-session knowledge (preferences, architecture decisions); session logs store ephemeral per-session work history. If you use both, a one-line pointer in MEMORY.md to `index.md` gives every fresh session awareness of the session log system.
+**Native auto-memory compatibility:** Session logs (`.claude/memory/`) and Claude Code's auto-memory (`~/.claude/projects/.../memory/MEMORY.md`) occupy different namespaces and complement each other — session logs for per-session work history, auto-memory for stable cross-session knowledge.
 
 ## Uninstall
 
