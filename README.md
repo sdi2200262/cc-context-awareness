@@ -36,9 +36,10 @@ cd cc-context-awareness
 
 Restart Claude Code after installing.
 
-### simple-session-memory template
+<details>
+<summary><strong>simple-session-memory template</strong> — automated session memory on top of cc-context-awareness</summary>
 
-Automated session memory on top of cc-context-awareness — Claude writes memory logs at 50/65/80% context, restores them after compaction, and archives old logs via a custom agent. Installs cc-context-awareness automatically if needed.
+Claude writes memory logs at 50/65/80% context, restores them after compaction, and archives old logs via a custom agent. Installs cc-context-awareness automatically if not present.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash
@@ -46,6 +47,8 @@ curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/mai
 ```
 
 See [Templates](#templates) for details.
+
+</details>
 
 ### Install Options
 
@@ -63,7 +66,7 @@ See [Templates](#templates) for details.
 
 ## What It Does
 
-Claude Code has built-in context awareness, but it's hardcoded — a single warning at 20% remaining that you can't change. cc-context-awareness makes it configurable: set thresholds at any percentage, inject any instruction, and trigger workflows automatically. Configurable thresholds are a [commonly](https://github.com/anthropics/claude-code/issues/14258) [requested](https://github.com/anthropics/claude-code/issues/11819) [feature](https://github.com/anthropics/claude-code/issues/6621) not yet available natively.
+Claude Code has built-in context awareness, but it's hardcoded — a single warning at 20% remaining that you can't change. This tool makes it configurable: set thresholds at any percentage, inject any instruction, and trigger workflows automatically. Configurable thresholds are a [commonly](https://github.com/anthropics/claude-code/issues/14258) [requested](https://github.com/anthropics/claude-code/issues/11819) [feature](https://github.com/anthropics/claude-code/issues/6621) not yet available natively.
 
 | | Claude Code built-in | cc-context-awareness |
 |---|---|---|
@@ -81,7 +84,7 @@ context ████████████████░░░░ 82%        
 
 ## How It Works
 
-The goal is to inject custom instructions into Claude's conversation when context thresholds are crossed. Claude Code's extension points don't support this directly, so cc-context-awareness bridges two mechanisms:
+The goal is to inject custom instructions into Claude's conversation when context thresholds are crossed. Claude Code's extension points don't support this directly, so this tool bridges two mechanisms:
 
 1. **Status line** — receives context window data after each assistant message, checks thresholds, writes a flag file when triggered
 2. **Hook** — runs before each tool call, reads the flag file, injects the message as `additionalContext` into Claude's conversation
@@ -103,11 +106,29 @@ After `/compact` or auto-compaction, the `session_id` stays the same but context
 
 Switch with: `./install.sh --hook-event <event>`
 
+## Templates
+
+Ready-to-use configurations that install hooks and config on top of this tool. Install commands are in [Quick Install](#quick-install) above.
+
+### simple-session-memory
+
+Automated session memory for single-agent sessions. Claude writes incremental memory logs at 50%, 65%, and 80% context usage, reads them back after compaction, and archives old logs via a dedicated custom agent.
+
+```
+50% context  →  writes initial session log
+65% context  →  appends progress update
+80% context  →  appends final update + suggests /compact
+auto-compact →  memory log loaded as context after compaction
+every 5 logs →  custom agent archives into a compressed summary
+```
+
+See [`templates/simple-session-memory/README.md`](templates/simple-session-memory/README.md) for full details.
+
 ## Handling Conflicts
 
 ### Merging with other statusLine tools
 
-Claude Code only supports **one** `statusLine` command. If you're using another statusline tool like [ccstatusline](https://github.com/sirmalloc/ccstatusline), cc-context-awareness can work alongside it — you just need to ensure the flag-writing logic runs.
+Claude Code only supports **one** `statusLine` command. If you're using another statusline tool like [ccstatusline](https://github.com/sirmalloc/ccstatusline), this tool can work alongside it — you just need to ensure the flag-writing logic runs.
 
 **Option 1: Wrap (recommended)**
 
@@ -132,27 +153,12 @@ Point your `settings.json` at the wrapper:
 
 **Installer behavior:** No existing statusLine → adds ours. Another tool's statusLine → prints merge instructions. `--overwrite` → replaces it.
 
-### Hooks and settings
+<details>
+<summary><strong>Hooks and settings</strong></summary>
 
 Hooks are additive — the installer appends without replacing existing hooks, checks for duplicates, and on uninstall removes only its own entries. If `settings.json` contains invalid JSON, the installer prints an error and skips modification.
 
-## Templates
-
-Ready-to-use configurations that install hooks and config on top of cc-context-awareness. Install commands are in [Quick Install](#quick-install) above.
-
-### simple-session-memory
-
-Automated session memory for single-agent sessions. Claude writes incremental memory logs at 50%, 65%, and 80% context usage, reads them back after compaction, and archives old logs via a dedicated custom agent.
-
-```
-50% context  →  writes initial session log
-65% context  →  appends progress update
-80% context  →  appends final update + suggests /compact
-auto-compact →  memory log loaded as context after compaction
-every 5 logs →  custom agent archives into a compressed summary
-```
-
-See [`templates/simple-session-memory/README.md`](templates/simple-session-memory/README.md) for full details.
+</details>
 
 ## Use Cases
 
@@ -230,7 +236,7 @@ Inform Claude at every 20% of context usage so it can make decisions based on re
 
 [Ralph Loops](https://github.com/snarktank/ralph) (named after Ralph Wiggum) are autonomous agent loops that repeatedly feed Claude the same prompt until completion — progress persists in files and git, not context. They can run for hours, but context exhaustion is a real risk: the agent may start a new iteration cycle right before hitting the limit, losing work or behaving erratically.
 
-cc-context-awareness can steer Ralph Loops by injecting instructions before context runs out:
+This tool can steer Ralph Loops by injecting instructions before context runs out:
 
 ```json
 {
