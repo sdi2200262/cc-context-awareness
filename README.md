@@ -36,6 +36,17 @@ cd cc-context-awareness
 
 Restart Claude Code after installing.
 
+### simple-session-memory template
+
+Automated session memory on top of cc-context-awareness — Claude writes memory logs at 50/65/80% context, restores them after compaction, and archives old logs via a custom agent. Installs cc-context-awareness automatically if needed.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash -s -- --global  # global
+```
+
+See [Templates](#templates) for details.
+
 ### Install Options
 
 | Flag | Effect |
@@ -86,7 +97,12 @@ This happens inside the agentic loop — Claude receives your custom instruction
 
 ### Compaction handling
 
-When `/compact` (or auto-compaction) fires, the `session_id` stays the same but context usage drops sharply. Without cleanup, a stale trigger file from before compaction would inject an outdated high-usage warning into the fresh post-compaction agent. The `SessionStart` reset handler prevents this by deleting both the trigger and fired-tier tracking files on the compaction boundary.
+When `/compact` (or auto-compaction) fires, the `session_id` stays the same but context usage drops sharply. Without cleanup, a stale trigger file from before compaction would inject an outdated high-usage warning into the fresh post-compaction agent.
+
+Two mechanisms prevent this:
+
+1. **Reset handler** — a `SessionStart` hook (matcher: `compact`) deletes both the trigger and fired-tier tracking files on the compaction boundary
+2. **Compaction marker** — the reset handler plants a short-lived marker file (`.cc-ctx-compacted-{session_id}`). If a late-running statusline (from the last pre-compaction message) tries to re-create stale flag files after the reset handler already cleaned up, the statusline sees the marker, resets its state, and consumes the marker instead of writing stale data
 
 ### Hook event options
 
@@ -148,6 +164,40 @@ If `settings.json` exists but contains invalid JSON, the installer will:
 - Print an error message
 - Still install the scripts (so you can fix settings.json and re-run)
 - Exit without modifying the broken file
+
+## Templates
+
+Ready-to-use configurations for common cc-context-awareness use cases. Each template installs hooks and config on top of a base cc-context-awareness install — cc-context-awareness is installed automatically if not already present.
+
+### simple-session-memory
+
+An automated session memory system for single-agent sessions. Claude writes incremental memory logs at 50%, 65%, and 80% context usage, reads them back after compaction to restore context, and archives old logs automatically via a dedicated custom agent.
+
+```
+50% context  →  writes initial session log
+65% context  →  appends progress update
+80% context  →  appends final update + suggests /compact
+auto-compact →  memory log loaded as context after compaction
+every 5 logs →  custom agent archives into a compressed summary
+```
+
+**Install (local — this project):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash
+```
+
+**Install (global — all projects):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash -s -- --global
+```
+
+Or from a cloned repo:
+```bash
+./templates/simple-session-memory/install.sh           # local
+./templates/simple-session-memory/install.sh --global  # global
+```
+
+See [`templates/simple-session-memory/README.md`](templates/simple-session-memory/README.md) for full details, memory log format, and design notes.
 
 ## Use Cases
 
@@ -321,35 +371,6 @@ Which Claude Code hook event triggers the context injection. Changing requires r
 #### `flag_dir` (string)
 
 Directory for flag files. Default: `"/tmp"`.
-
-</details>
-
-## Templates
-
-<details>
-
-Ready-to-use configurations for common cc-context-awareness use cases. Each template adds hooks and config on top of a base cc-context-awareness install.
-
-### simple-session-memory
-
-An automated session memory system for single-agent sessions. Claude writes incremental memory logs at 50%, 65%, and 80% context usage, and reads them back after compaction to restore context.
-
-```
-50% context  →  writes initial session log
-65% context  →  appends progress update
-80% context  →  appends final update + suggests /compact
-auto-compact →  memory log loaded as context after compaction
-stop         →  ensures memory is written before ending
-every 5 logs →  archives into a compressed summary
-```
-
-```bash
-# Requires cc-context-awareness to be installed first
-./templates/simple-session-memory/install.sh           # local
-./templates/simple-session-memory/install.sh --global  # global
-```
-
-See [`templates/simple-session-memory/README.md`](templates/simple-session-memory/README.md) for full details.
 
 </details>
 

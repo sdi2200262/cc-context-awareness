@@ -141,6 +141,15 @@ chmod +x "$HOOKS_DIR/archival.sh"
 
 echo "  Installed hooks to $HOOKS_DIR"
 
+# ── Install custom agent ─────────────────────────────────────────────────────
+
+AGENTS_DIR="$CLAUDE_DIR/agents"
+mkdir -p "$AGENTS_DIR"
+
+get_file "agents/memory-archiver.md" "$AGENTS_DIR/memory-archiver.md"
+
+echo "  Installed memory-archiver agent to $AGENTS_DIR"
+
 # ── Patch cc-context-awareness config with memory thresholds ─────────────────
 
 THRESHOLDS_TMP=""
@@ -311,6 +320,7 @@ echo ""
 echo "✓ simple-session-memory installed ($INSTALL_MODE)!"
 echo ""
 echo "  Hooks:    $HOOKS_DIR"
+echo "  Agent:    $AGENTS_DIR/memory-archiver.md"
 echo "  Memory:   $MEMORY_DIR"
 echo "  Config:   $CONFIG_FILE (memory thresholds added)"
 echo "  Settings: $SETTINGS_FILE"

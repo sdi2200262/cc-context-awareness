@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # simple-session-memory — Archival check hook (SessionStart, matcher: "compact")
 # Counts session logs in pure bash. If >= 5 accumulate, injects an instruction
-# into the session context telling Claude to launch an archival subagent.
-# The subagent does the actual condensation — no bash string concatenation.
+# into the session context telling Claude to delegate to the memory-archiver agent.
+# The custom agent does the actual condensation — no bash string concatenation.
 #
 # Hook event: SessionStart (matcher: "compact")
 # Runs AFTER session-start.sh so session context is loaded first.
@@ -50,6 +50,6 @@ jq -n \
   '{
     "hookSpecificOutput": {
       "hookEventName": "SessionStart",
-      "additionalContext": ("SESSION MEMORY ARCHIVAL NEEDED\n\n" + $n + " session logs have accumulated. Before proceeding with any other work, launch a subagent to archive them.\n\nFiles to archive:\n" + $files + "\nSubagent instructions:\n1. Read all files listed above.\n2. Synthesize their content into a single condensed archive at " + $target + " — preserve key decisions, outcomes, file changes, and next-step context; discard resolved in-progress state, redundancy, and noise. Write it as a coherent narrative a future session can use to reconstruct history.\n3. Create .claude/memory/archive/ if it does not exist.\n4. Update .claude/memory/index.md: remove the archived session rows from the main table, add a row for " + $target + " in the Archives section (create the section if missing) showing the date range it covers.\n5. Delete the source files listed above.\n\nThe newest session log is NOT in this list and must NOT be deleted.")
+      "additionalContext": ("SESSION MEMORY ARCHIVAL NEEDED\n\n" + $n + " session logs have accumulated. Before proceeding with any other work, delegate to the memory-archiver agent to archive them.\n\nFiles to archive:\n" + $files + "\nArchive target: " + $target + "\n\nThe newest session log is NOT in this list and must NOT be deleted.")
     }
   }'

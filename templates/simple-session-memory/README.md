@@ -12,7 +12,7 @@ Turns cc-context-awareness threshold warnings into an automated session journal.
 65% context  →  Claude appends a progress update
 80% context  →  Claude appends final update + suggests /compact
 Auto-compact →  After resuming, memory log is loaded as context
-Every 5 logs →  A subagent synthesizes them into an archive
+Every 5 logs →  The memory-archiver agent synthesizes them into an archive
 ```
 
 Memory logs are named `.claude/memory/session-YYYY-MM-DD-NNN.md` where `NNN` is derived by counting existing logs in `.claude/memory/` at write time. The session ID is stored in the YAML frontmatter, not the filename — this makes logs easy to sort and archive without encoding volatile identifiers into paths. Each log captures:
@@ -66,6 +66,12 @@ curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/mai
 | `SessionStart` | `compact` | `session-start.sh` | After compaction: loads most recent memory log (or archive) as context |
 | `SessionStart` | `compact` | `archival.sh` | Counts session logs; injects archival instructions if ≥ 5 accumulate |
 
+### Custom agent installed
+
+| File | Purpose |
+|------|---------|
+| `.claude/agents/memory-archiver.md` | Dedicated agent for archiving session logs — uses haiku model with auto-accept permissions for cost-efficient, zero-friction archival |
+
 ### cc-context-awareness config changes
 
 Adds three memory-trigger thresholds to your existing cc-context-awareness config:
@@ -82,6 +88,8 @@ These are prepended to your existing thresholds so memory writes happen before y
 
 ```
 .claude/
+  agents/
+    memory-archiver.md              # Custom archival agent definition
   memory/
     index.md                        # Running index of all sessions (auto-maintained)
     archive/                        # Synthesized archives of older sessions
@@ -151,16 +159,18 @@ Updates are appended with a separator:
 | archive-2026-02-15.md | sessions 001–005 (2026-02-10 to 2026-02-15) |
 ```
 
-The table stays at the top; the Archives section is managed by the archival subagent.
+The table stays at the top; the Archives section is managed by the memory-archiver agent.
 
 ## Archival
 
-When 5 session logs accumulate in `.claude/memory/`, `archival.sh` fires at the start of the next post-compaction session (after `session-start.sh` restores context). It injects instructions telling Claude to launch a subagent that:
+When 5 session logs accumulate in `.claude/memory/`, `archival.sh` fires at the start of the next post-compaction session (after `session-start.sh` restores context). It injects instructions telling Claude to delegate to the `memory-archiver` custom agent (`.claude/agents/memory-archiver.md`), which:
 
 1. Archives all logs **except the most recent** (the newest is always preserved)
 2. Creates a synthesized archive at `.claude/memory/archive/archive-YYYY-MM-DD.md`
 3. Updates `index.md` — moves archived entries to the Archives section
 4. Deletes the archived source logs
+
+The custom agent uses the `haiku` model for cost efficiency and has `acceptEdits` permission mode so it can write to `.claude/` without prompting. This solves permission issues that occur when using a generic subagent via the Task tool.
 
 After archival there is always exactly one individual session log remaining — the previous session — so there is never a context gap between sessions. Archives preserve key decisions, outcomes, and context useful for future sessions.
 
@@ -170,7 +180,9 @@ After archival there is always exactly one individual session log remaining — 
 
 **Why not use a Stop hook?** Stop hooks that block Claude (returning `decision: "block"`) cause problems in non-interactive permission modes — they stall the session waiting for a response that won't come. Instead, the 50%/65%/80% threshold reminders give Claude plenty of opportunity to write a log before any compaction, and the Stop hook is not needed.
 
-**Why a subagent for archival, not bash concatenation?** Concatenating 5 logs is trivial in bash, but a subagent can *synthesize* them — dropping ephemeral details and preserving the signal. The archive is meant to be readable months later, not just a dump. `archival.sh` does the cheap count check in pure bash with zero token cost; the subagent only runs when actually needed.
+**Why a custom agent for archival, not bash concatenation?** Concatenating 5 logs is trivial in bash, but an LLM agent can *synthesize* them — dropping ephemeral details and preserving the signal. The archive is meant to be readable months later, not just a dump. `archival.sh` does the cheap count check in pure bash with zero token cost; the memory-archiver agent only runs when actually needed. It uses the `haiku` model for cost efficiency and `acceptEdits` permission mode to avoid the file-write permission errors that occur with generic Task-tool subagents.
+
+**What about stale threshold injections after compaction?** After compaction, context drops sharply but the `session_id` stays the same. Without protection, a late-running statusline from the last pre-compaction message could re-create a trigger file with stale percentage data (e.g. "Context at 80%..." when context is actually at 10%). cc-context-awareness handles this with a compaction marker — the reset handler plants a marker that the statusline checks before writing any flags. If the marker is present, the statusline resets its state instead of writing stale data. This protects all thresholds including `memory-50`, `memory-65`, and `memory-80`.
 
 **Does this conflict with Claude Code's native auto-memory (`MEMORY.md`)?** No — they occupy entirely different namespaces. Native auto-memory lives at `~/.claude/projects/<project>/memory/MEMORY.md` (outside the repo) and is auto-loaded at every session start. Session logs live at `.claude/memory/` (inside the repo) and are loaded by hooks or on-demand. The two are complementary: MEMORY.md stores stable cross-session knowledge (preferences, architecture decisions); session logs store ephemeral per-session work history. If you use both, a one-line pointer in MEMORY.md to `index.md` gives every fresh session awareness of the session log system.
 

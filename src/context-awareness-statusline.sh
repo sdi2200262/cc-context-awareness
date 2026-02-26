@@ -71,9 +71,15 @@ fi
 
 FIRED_FILE="${FLAG_DIR}/.cc-ctx-fired-${SESSION_ID}"
 TRIGGER_FILE="${FLAG_DIR}/.cc-ctx-trigger-${SESSION_ID}"
+COMPACTED_FILE="${FLAG_DIR}/.cc-ctx-compacted-${SESSION_ID}"
 
-# Load fired-tiers tracking
-if [[ -f "$FIRED_FILE" ]]; then
+# If a compaction just happened, reset all state and consume the marker.
+# This prevents a late-running statusline (from the last pre-compaction message)
+# from re-creating stale trigger/fired files after the reset handler cleaned up.
+if [[ -f "$COMPACTED_FILE" ]]; then
+  rm -f "$COMPACTED_FILE" "$TRIGGER_FILE" "$FIRED_FILE"
+  FIRED='{}'
+elif [[ -f "$FIRED_FILE" ]]; then
   FIRED="$(cat "$FIRED_FILE")"
 else
   FIRED='{}'

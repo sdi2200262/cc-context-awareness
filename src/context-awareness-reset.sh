@@ -29,3 +29,8 @@ fi
 # Remove stale flag files for this session
 rm -f "${FLAG_DIR}/.cc-ctx-trigger-${SESSION_ID}"
 rm -f "${FLAG_DIR}/.cc-ctx-fired-${SESSION_ID}"
+
+# Plant compaction marker so the statusline knows to skip stale writes.
+# Without this, a late-running statusline (from the last pre-compaction message)
+# can re-create the trigger file with stale percentage data after we've cleaned up.
+touch "${FLAG_DIR}/.cc-ctx-compacted-${SESSION_ID}"

@@ -65,6 +65,19 @@ if [ -d "$PARENT_DIR" ] && [ -z "$(ls -A "$PARENT_DIR" 2>/dev/null)" ]; then
   rmdir "$PARENT_DIR" 2>/dev/null || true
 fi
 
+# ── Remove custom agent ──────────────────────────────────────────────────────
+
+AGENT_FILE="$CLAUDE_DIR/agents/memory-archiver.md"
+if [ -f "$AGENT_FILE" ]; then
+  rm -f "$AGENT_FILE"
+  echo "  Removed $AGENT_FILE"
+fi
+
+# Remove agents dir if empty
+if [ -d "$CLAUDE_DIR/agents" ] && [ -z "$(ls -A "$CLAUDE_DIR/agents" 2>/dev/null)" ]; then
+  rmdir "$CLAUDE_DIR/agents" 2>/dev/null || true
+fi
+
 # ── Remove memory thresholds from cc-context-awareness config ─────────────────
 
 if [ -f "$CONFIG_FILE" ] && command -v jq &>/dev/null; then

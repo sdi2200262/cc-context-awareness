@@ -137,7 +137,7 @@ fi
 
 # ── Clean up flag files ──────────────────────────────────────────────────────
 
-rm -f /tmp/.cc-ctx-trigger-* /tmp/.cc-ctx-fired-*
+rm -f /tmp/.cc-ctx-trigger-* /tmp/.cc-ctx-fired-* /tmp/.cc-ctx-compacted-*
 echo "  Cleaned up flag files"
 
 # ── Done ─────────────────────────────────────────────────────────────────────

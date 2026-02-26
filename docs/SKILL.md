@@ -245,8 +245,7 @@ When the user asks about memory management, session continuity after compaction,
 The simple-session-memory template adds:
 - Memory-trigger thresholds at 50%, 65%, 80% context usage → Claude writes/appends `.claude/memory/session-YYYY-MM-DD-NNN.md` (counter-based; session_id in frontmatter)
 - A `SessionStart` hook (matcher: `compact`) → after compaction, loads the most recent memory log (or archive) as `additionalContext`
-- A `Stop` hook → ensures at least one memory log is written per session
-- An agent-type `Stop` hook → every 5 session logs, a subagent archives all but the newest into `.claude/memory/archive/`
+- A `SessionStart` hook (matcher: `compact`) → every 5 session logs, the `memory-archiver` custom agent (`.claude/agents/memory-archiver.md`) archives all but the newest into `.claude/memory/archive/`
 - A session index at `.claude/memory/index.md` → maintained by Claude at each 50% checkpoint; gives fresh sessions a quick orientation into recent history
 
 **Install (must have cc-context-awareness already installed):**

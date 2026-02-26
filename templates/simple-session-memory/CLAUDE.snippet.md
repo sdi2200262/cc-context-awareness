@@ -87,7 +87,7 @@ Subsequent updates append with a separator:
 | archive-YYYY-MM-DD.md | sessions NNN–NNN (date range) |
 ```
 
-Keep the most recent sessions at the top of the table. The Archives section is managed by the archival subagent — do not edit it manually.
+Keep the most recent sessions at the top of the table. The Archives section is managed by the memory-archiver agent — do not edit it manually.
 
 ## After Compaction
 
@@ -95,7 +95,7 @@ When resuming after compaction, a hook automatically loads the most recent sessi
 
 ## Archival
 
-When 5 session logs accumulate, a hook injects archival instructions at the start of the next post-compaction session. When you see these instructions, launch a subagent to synthesize the older logs into `.claude/memory/archive/`. The newest session log is always preserved — never archived — so the previous session's context is never lost.
+When 5 session logs accumulate, a hook injects archival instructions at the start of the next post-compaction session. When you see these instructions, delegate to the `memory-archiver` agent (defined in `.claude/agents/memory-archiver.md`) to synthesize the older logs into `.claude/memory/archive/`. The newest session log is always preserved — never archived — so the previous session's context is never lost.
 
 ## Integration with Claude Code Auto-Memory
 
