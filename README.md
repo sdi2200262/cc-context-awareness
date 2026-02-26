@@ -36,20 +36,6 @@ cd cc-context-awareness
 
 Restart Claude Code after installing.
 
-<details>
-<summary><strong>simple-session-memory template</strong> — automated session memory on top of cc-context-awareness</summary>
-
-Claude writes memory logs at 50/65/80% context, restores them after compaction, and archives old logs via a custom agent. Installs cc-context-awareness automatically if not present.
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash -s -- --global  # global
-```
-
-See [Templates](#templates) for details.
-
-</details>
-
 ### Install Options
 
 | Flag | Effect |
