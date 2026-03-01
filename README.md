@@ -36,34 +36,6 @@ cd cc-context-awareness
 
 Restart Claude Code after installing.
 
-<details>
-<summary><strong>simple-session-memory template</strong> — automated session memory on top of cc-context-awareness</summary>
-
-Claude writes memory logs at 50/65/80% context, restores them after compaction, and archives old logs via a custom agent. Installs cc-context-awareness automatically if not present.
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash -s -- --global  # global
-```
-
-See [Templates](#templates) for details.
-
-</details>
-
-<details>
-<summary><strong>apm-handoff template</strong> - automatic Handoff triggers for APM agents</summary>
-
-Agents never silently hit the context wall. At 70% context (configurable), the agent automatically initiates its Handoff procedure. A SessionStart hook then signals the incoming agent that a Handoff is pending. For use with [APM](https://github.com/sdi2200262/agentic-project-management) v1.0.0-dev. Installs cc-context-awareness automatically if not present.
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/apm-handoff/install.sh | bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/apm-handoff/install.sh | bash -s -- --global  # global
-```
-
-See [Templates](#templates) for details.
-
-</details>
-
 ### Install Options
 
 | Flag | Effect |
@@ -150,12 +122,11 @@ new session  → hook detects pending Handoff, signals incoming agent
 See [`templates/apm-handoff/README.md`](templates/apm-handoff/README.md) for full details.
 
 ## Handling Conflicts
-
-### Merging with other statusLine tools
-
+<details>
+  
 Claude Code only supports **one** `statusLine` command. If you're using another statusline tool like [ccstatusline](https://github.com/sirmalloc/ccstatusline), this tool can work alongside it — you just need to ensure the flag-writing logic runs.
-
-**Option 1: Wrap (recommended)**
+  
+### Option 1: Wrap (recommended)
 
 Create a wrapper script that calls both:
 
@@ -174,12 +145,13 @@ Point your `settings.json` at the wrapper:
 
 **[ccstatusline](https://github.com/sirmalloc/ccstatusline) users:** Use `bunx ccstatusline@latest` as the other statusline. To avoid a duplicate context display, redirect ours: `echo "$INPUT" | ~/.claude/cc-context-awareness/context-awareness-statusline.sh > /dev/null` — this keeps the flag-writing active without showing the bar.
 
-**Option 2: Merge** — Copy the flag-writing logic into your own statusline. The critical part is writing to `/tmp/.cc-ctx-trigger-{session_id}` when thresholds are crossed.
+### Option 2: Merge
 
-**Installer behavior:** No existing statusLine → adds ours. Another tool's statusLine → prints merge instructions. `--overwrite` → replaces it.
+Copy the flag-writing logic into your own statusline. The critical part is writing to `/tmp/.cc-ctx-trigger-{session_id}` when thresholds are crossed.
 
-<details>
-<summary><strong>Hooks and settings</strong></summary>
+<strong>Installer behavior:</strong> No existing statusLine → adds ours. Another tool's statusLine → prints merge instructions. `--overwrite` → replaces it.
+
+### Hooks and settings
 
 Hooks are additive — the installer appends without replacing existing hooks, checks for duplicates, and on uninstall removes only its own entries. If `settings.json` contains invalid JSON, the installer prints an error and skips modification.
 
