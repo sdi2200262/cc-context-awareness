@@ -50,6 +50,20 @@ See [Templates](#templates) for details.
 
 </details>
 
+<details>
+<summary><strong>apm-handoff template</strong> - automatic Handoff triggers for APM agents</summary>
+
+Agents never silently hit the context wall. At 70% context (configurable), the agent automatically initiates its Handoff procedure. A SessionStart hook then signals the incoming agent that a Handoff is pending. For use with [APM](https://github.com/sdi2200262/agentic-project-management) v1.0.0-dev. Installs cc-context-awareness automatically if not present.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/apm-handoff/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/apm-handoff/install.sh | bash -s -- --global  # global
+```
+
+See [Templates](#templates) for details.
+
+</details>
+
 ### Install Options
 
 | Flag | Effect |
@@ -123,6 +137,17 @@ every 5 logs →  custom agent archives into a compressed summary
 ```
 
 See [`templates/simple-session-memory/README.md`](templates/simple-session-memory/README.md) for full details.
+
+### apm-handoff
+
+Automatic Handoff triggers for [APM](https://github.com/sdi2200262/agentic-project-management) (Agentic Project Management) agents. Agents never silently hit the context wall - at 70% (configurable), they automatically initiate a Handoff. A SessionStart detection hook then signals the incoming agent that a Handoff is pending.
+
+```
+70% context  → agent automatically triggers Handoff procedure
+new session  → hook detects pending Handoff, signals incoming agent
+```
+
+See [`templates/apm-handoff/README.md`](templates/apm-handoff/README.md) for full details.
 
 ## Handling Conflicts
 

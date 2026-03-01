@@ -1,0 +1,7 @@
+[
+  {
+    "percent": 70,
+    "level": "apm-handoff",
+    "message": "AUTOMATIC HANDOFF TRIGGER - context at {percentage}%. Stop current work and act on this immediately.\n\nIdentify which APM agent you are registered as and follow ONLY the matching instruction:\n\nMANAGER: Initiate a Handoff now. Read and execute /apm-6-handoff-manager. After completing the Handoff procedure, inform the User to start a new session with /apm-2-initiate-manager.\n\nWORKER: Initiate a Handoff now. Read and execute /apm-7-handoff-worker. After completing the Handoff procedure, inform the User to start a new session with /apm-3-initiate-worker <agent-id>.\n\nPLANNER: Handoff is not available. Inform the User that context is at {percentage}% and continue working. Be concise in chat - minimize visible reasoning and conversational text - but do NOT reduce the quality, depth, or completeness of any planning documents. Specifications, Implementation Plan, and Execution Standards dictate the success of the Implementation Phase and must receive full attention regardless of context pressure. Do not skip or abbreviate any part of the Context Gathering or Work Breakdown procedures."
+  }
+]
