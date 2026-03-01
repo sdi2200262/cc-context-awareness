@@ -26,17 +26,17 @@ Memory logs are named `.claude/memory/session-YYYY-MM-DD-NNN.md` where `NNN` is 
 
 ## Requirements
 
-- `jq`
-- cc-context-awareness is **installed automatically** if not already present
+- [`jq`](https://jqlang.github.io/jq/download/) (runtime dependency)
+- [Node.js](https://nodejs.org/) >= 18 (for `npx`)
 
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash -s -- --global  # global
+npx cc-context-awareness install simple-session-memory
+npx cc-context-awareness install simple-session-memory --global  # global
 ```
 
-Or from a cloned repo: `./templates/simple-session-memory/install.sh` (add `--global` for all projects).
+The base system is installed automatically if not already present.
 
 ### Install Options
 
@@ -57,7 +57,7 @@ Or from a cloned repo: `./templates/simple-session-memory/install.sh` (add `--gl
   simple-session-memory/
     hooks/
       session-start.sh              # Loads memory after compaction
-      archival.sh                   # Triggers archival when ≥ 5 logs accumulate
+      archival.sh                   # Triggers archival when >= 5 logs accumulate
 CLAUDE.md                           # Instructions appended (optional)
 ```
 
@@ -149,23 +149,15 @@ After archival there is always exactly one individual session log remaining — 
 
 **Why a custom agent for archival, not bash?** Bash can concatenate logs, but an LLM can *synthesize* them — dropping noise and preserving signal. `archival.sh` does the cheap count check in pure bash; the memory-archiver agent (haiku, `acceptEdits`) only runs when needed and avoids the permission errors that generic Task-tool subagents hit when writing to `.claude/`.
 
-**Compaction safety:** After compaction, cc-context-awareness uses a compaction marker to prevent late-running statusline updates from re-creating stale trigger files. This protects all thresholds including `memory-50/65/80`.
+**Compaction safety:** After compaction, cc-context-awareness uses a compaction marker to prevent stale threshold evaluations. This protects all thresholds including `memory-50/65/80`.
 
 **Native auto-memory compatibility:** Session logs (`.claude/memory/`) and Claude Code's auto-memory (`~/.claude/projects/.../memory/MEMORY.md`) occupy different namespaces and complement each other — session logs for per-session work history, auto-memory for stable cross-session knowledge.
 
 ## Uninstall
 
 ```bash
-# Local uninstall
-./templates/simple-session-memory/uninstall.sh
-
-# Global uninstall
-./templates/simple-session-memory/uninstall.sh --global
+npx cc-context-awareness remove simple-session-memory
+npx cc-context-awareness remove simple-session-memory --global  # global
 ```
 
-Or via curl:
-```bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/uninstall.sh | bash
-```
-
-The uninstaller removes hooks, cleans up settings, and removes the `memory-50`/`memory-65`/`memory-80` thresholds from cc-context-awareness config. Memory logs at `.claude/memory/` are preserved.
+This removes hooks, cleans up settings, and removes the `memory-50`/`memory-65`/`memory-80` thresholds from cc-context-awareness config. Memory logs at `.claude/memory/` are preserved.

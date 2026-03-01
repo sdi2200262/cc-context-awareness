@@ -17,83 +17,15 @@ Read the current config before making changes. Use targeted edits — don't over
 
 ## Handling Conflicts
 
-### StatusLine conflicts
+### StatusLine composition
 
-If another tool is using the `statusLine` slot, cc-context-awareness can **wrap** or **merge** with it. The statusline script writes a flag file that the hook reads — this bridge must be preserved for warnings to fire.
+The bridge script is a transparent pipe prefix that extracts percentage data from stdin and passes the original JSON through to any downstream statusLine tool. If you have another tool like [ccstatusline](https://github.com/sirmalloc/ccstatusline), the bridge is automatically prepended during install:
 
-#### ccstatusline (most common conflict)
-
-[ccstatusline](https://github.com/sirmalloc/ccstatusline) is a popular status line formatter for Claude Code. If you have it installed, your `settings.json` will have a `statusLine` entry like `"bunx ccstatusline@latest"` or `"npx ccstatusline@latest"`.
-
-**Step 1:** Create a wrapper at `~/.claude/statusline-wrapper.sh`:
-
-```bash
-#!/usr/bin/env bash
-# Runs ccstatusline (display) then cc-context-awareness (flag writing)
-INPUT=$(cat)
-echo "$INPUT" | bunx ccstatusline@latest   # replace with npx if you use npm
-echo "$INPUT" | ~/.claude/cc-context-awareness/context-awareness-statusline.sh
+```
+bridge.sh | bunx ccstatusline@latest
 ```
 
-Make it executable: `chmod +x ~/.claude/statusline-wrapper.sh`
-
-**Step 2:** Update `~/.claude/settings.json`:
-```json
-{
-  "statusLine": {
-    "type": "command",
-    "command": "~/.claude/statusline-wrapper.sh"
-  }
-}
-```
-
-**Hiding the cc-context-awareness bar:** ccstatusline already has a `ContextPercentage` widget. To avoid a duplicate bar, redirect cc-context-awareness output to `/dev/null` in the wrapper — the flag-writing still happens, only the display is suppressed:
-
-```bash
-#!/usr/bin/env bash
-INPUT=$(cat)
-echo "$INPUT" | bunx ccstatusline@latest
-echo "$INPUT" | ~/.claude/cc-context-awareness/context-awareness-statusline.sh > /dev/null
-```
-
-For **local installs**, adjust the path in the wrapper:
-```bash
-echo "$INPUT" | "$(pwd)/.claude/cc-context-awareness/context-awareness-statusline.sh" > /dev/null
-```
-
-#### Other statusline tools
-
-**Option 1: Wrap (recommended)**
-
-```bash
-#!/usr/bin/env bash
-# ~/.claude/statusline-wrapper.sh
-INPUT=$(cat)
-echo "$INPUT" | /path/to/other/statusline.sh
-echo "$INPUT" | ~/.claude/cc-context-awareness/context-awareness-statusline.sh
-```
-
-Then update `~/.claude/settings.json`:
-```json
-{
-  "statusLine": {
-    "type": "command",
-    "command": "~/.claude/statusline-wrapper.sh"
-  }
-}
-```
-
-**Option 2: Merge**
-
-Copy the flag-writing logic from `~/.claude/cc-context-awareness/context-awareness-statusline.sh` into your existing statusline script. The critical parts are:
-1. Reading thresholds from `~/.claude/cc-context-awareness/config.json`
-2. Writing the trigger file to `/tmp/.cc-ctx-trigger-{session_id}` when thresholds are crossed
-3. Tracking fired tiers in `/tmp/.cc-ctx-fired-{session_id}`
-4. Clearing both files on compaction via the `SessionStart` reset handler
-
-**Option 3: Replace**
-
-Re-run the installer with `--overwrite` to replace the existing statusLine (you'll lose the other tool's functionality).
+No manual wrapper scripts needed. The bridge extracts and caches percentage data, then passes the full JSON through unchanged to your existing statusLine tool.
 
 ### Hooks
 
@@ -109,7 +41,7 @@ Each threshold triggers a warning when context usage reaches that percentage.
 |-------|------|-------------|
 | `percent` | number | Context usage percentage to trigger at (0–100) |
 | `level` | string | Unique tier identifier (e.g. `"warning"`, `"critical"`). Must be unique across thresholds. |
-| `message` | string | Message injected into conversation. Supports `{percentage}` and `{remaining}` placeholders |
+| `message` | string | Message injected into conversation. Supports `{percentage}`, `{remaining}`, and `{session_id}` placeholders |
 
 ### `repeat_mode` (string)
 
@@ -120,36 +52,6 @@ Controls when warnings re-fire.
 | `"once_per_tier_reset_on_compaction"` | Each tier fires once. Resets if usage drops below the threshold (e.g. after compaction). **Default.** |
 | `"once_per_tier"` | Each tier fires once per session. Never resets. |
 | `"every_turn"` | Fires on every turn while above the threshold. |
-
-### `statusline` (object)
-
-Controls the status bar appearance.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `true` | Show the status line |
-| `bar_width` | number | `20` | Width of the progress bar in characters |
-| `bar_filled` | string | `"█"` | Character for filled portion |
-| `bar_empty` | string | `"░"` | Character for empty portion |
-| `format` | string | `"context {bar} {percentage}%"` | Format string. Supports `{bar}` and `{percentage}` |
-| `color_normal` | string | `"37"` | ANSI color code for normal state (37=white) |
-| `color_warning` | string | `"31"` | ANSI color code for warning state (31=red) |
-| `warning_indicator` | string | `""` | Appended to bar when above a threshold. Empty by default (color change is the indicator). |
-
-### `hook_event` (string)
-
-Which Claude Code hook event triggers the context injection.
-
-| Value | Behavior |
-|-------|----------|
-| `"PreToolUse"` | Fires before every tool call inside the agentic loop. **Default.** |
-| `"PostToolUse"` | Fires after every tool call inside the agentic loop. |
-| `"UserPromptSubmit"` | Fires once per user prompt. No mid-loop coverage. |
-
-Changing this value also requires re-running the installer to update `settings.json`:
-```bash
-./install.sh --hook-event PostToolUse
-```
 
 ### `flag_dir` (string)
 
@@ -183,19 +85,6 @@ Replace the `thresholds` array with:
 ]
 ```
 
-### Change bar style to simple ASCII
-
-```json
-{
-  "bar_filled": "#",
-  "bar_empty": "-"
-}
-```
-
-### Use yellow for warnings instead of red
-
-Set `color_warning` to `"33"` (ANSI yellow).
-
 ### Make warnings fire every turn
 
 Set `repeat_mode` to `"every_turn"`.
@@ -210,23 +99,29 @@ Set `repeat_mode` to `"every_turn"`.
 
 ## Templates
 
-Ready-to-use configurations for common use cases. Each template adds hooks and config on top of a base cc-context-awareness install.
+Ready-to-use configurations for common use cases. Each template adds hooks and config on top of a base cc-context-awareness install. One template active at a time.
 
 ### simple-session-memory
 
 Adds an automated session memory system. Claude writes incremental memory logs at 50%, 65%, and 80% context usage, and reads the log back after auto-compaction to restore context.
 
-**Install** (requires cc-context-awareness already installed):
+**Install:**
 ```bash
-# From cloned repo:
-./templates/simple-session-memory/install.sh           # local
-./templates/simple-session-memory/install.sh --global  # global
-
-# Via curl:
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/simple-session-memory/install.sh | bash
+npx cc-context-awareness install simple-session-memory        # local
+npx cc-context-awareness install simple-session-memory --global  # global
 ```
 
 See `templates/simple-session-memory/README.md` for full details, memory log format, and archival behavior.
+
+### apm-handoff
+
+Automatic Handoff triggers for APM agents at 70% context.
+
+**Install:**
+```bash
+npx cc-context-awareness install apm-handoff        # local
+npx cc-context-awareness install apm-handoff --global  # global
+```
 
 ## Common ANSI Color Codes
 

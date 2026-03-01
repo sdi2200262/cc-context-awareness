@@ -8,47 +8,68 @@ Tell Claude what to do based on how much context it has used. Configurable thres
 
 ## Quick Install
 
-**Local install** (per-project, default):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/install.sh | bash
+npx cc-context-awareness
 ```
 
-**Global install** (all projects):
+This opens an interactive menu. Or install directly:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/install.sh | bash -s -- --global
+npx cc-context-awareness install                          # install base system
+npx cc-context-awareness install simple-session-memory    # install a template
+npx cc-context-awareness install apm-handoff --global     # install globally
 ```
 
 | Mode | Scripts | Settings | Use case |
 |------|---------|----------|----------|
 | Local (default) | `./.claude/cc-context-awareness/` | `./.claude/settings.local.json` | Different thresholds per project |
-| Global | `~/.claude/cc-context-awareness/` | `~/.claude/settings.json` | Same config everywhere |
+| Global (`--global`) | `~/.claude/cc-context-awareness/` | `~/.claude/settings.json` | Same config everywhere |
 
 **Priority:** Local settings override global. If you have both installed, the local config is used in that project.
 
-Or clone and install:
+Restart Claude Code after installing.
+
+<details>
+<summary><strong>simple-session-memory template</strong> — automated session memory on top of cc-context-awareness</summary>
+
+Claude writes memory logs at 50/65/80% context, restores them after compaction, and archives old logs via a custom agent.
 
 ```bash
-git clone https://github.com/sdi2200262/cc-context-awareness.git
-cd cc-context-awareness
-./install.sh           # local (this project)
-./install.sh --global  # global (all projects)
+npx cc-context-awareness install simple-session-memory
+npx cc-context-awareness install simple-session-memory --global  # global
 ```
 
-Restart Claude Code after installing.
+See [Templates](#templates) for details.
+
+</details>
+
+<details>
+<summary><strong>apm-handoff template</strong> - automatic Handoff triggers for APM agents</summary>
+
+Agents never silently hit the context wall. At 70% context (configurable), the agent automatically initiates its Handoff procedure. A SessionStart hook then signals the incoming agent that a Handoff is pending. For use with [APM](https://github.com/sdi2200262/agentic-project-management) v1.0.0-dev.
+
+```bash
+npx cc-context-awareness install apm-handoff
+npx cc-context-awareness install apm-handoff --global  # global
+```
+
+See [Templates](#templates) for details.
+
+</details>
 
 ### Install Options
 
 | Flag | Effect |
 |------|--------|
 | `--global` | Install globally to `~/.claude/` instead of locally to `./.claude/` |
-| `--overwrite` | Replace an existing `statusLine` config (see [Handling Conflicts](#handling-conflicts)) |
 | `--no-skill` | Skip the agent skill; install a standalone configuration guide instead |
-| `--hook-event <event>` | Hook event for context injection. Default: `PreToolUse`. Also accepts `PostToolUse`, `UserPromptSubmit` |
+| `--no-claude-md` | Skip appending template instructions to `CLAUDE.md` |
 
 ### Requirements
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
-- [`jq`](https://jqlang.github.io/jq/download/) — install with `brew install jq` (macOS) or `sudo apt-get install jq` (Ubuntu)
+- [Node.js](https://nodejs.org/) >= 18 (for `npx`)
+- [`jq`](https://jqlang.github.io/jq/download/) (runtime dependency for bash scripts) — install with `brew install jq` (macOS) or `sudo apt-get install jq` (Ubuntu)
 
 ## What It Does
 
@@ -61,40 +82,33 @@ Claude Code has built-in context awareness, but it's hardcoded — a single warn
 | Custom messages | No | Yes — inject any instruction |
 | Trigger workflows | No | Yes — pre-compaction saves, behavioral changes |
 
-An optional status line shows live context usage at the bottom of your session:
-
-```
-context ████████████░░░░░░░░ 60%        (normal — white)
-context ████████████████░░░░ 82%        (warning — red)
-```
-
 ## How It Works
 
 The goal is to inject custom instructions into Claude's conversation when context thresholds are crossed. Claude Code's extension points don't support this directly, so this tool bridges two mechanisms:
 
-1. **Status line** — receives context window data after each assistant message, checks thresholds, writes a flag file when triggered
-2. **Hook** — runs before each tool call, reads the flag file, injects the message as `additionalContext` into Claude's conversation
-3. **Reset handler** — runs on `SessionStart` after `/compact` or auto-compaction, clears stale flag files so the post-compaction agent starts with a clean state
+1. **Bridge** (statusLine) — a transparent pipe prefix that extracts `used_percentage` from the JSON Claude Code sends to statusLine scripts, writes it to a session-scoped file (`/tmp/.cc-ctx-pct-{session_id}`), and passes the original JSON through to any downstream statusLine tool
+2. **Threshold evaluator** (PreToolUse hook) — reads the percentage from the bridge's file, evaluates thresholds from config.json, and injects the message as `additionalContext` into Claude's conversation
+3. **Reset handler** (SessionStart hook) — runs after `/compact` or auto-compaction, clears stale state files so the post-compaction agent starts clean
 
-This happens inside the agentic loop — Claude receives your custom instructions mid-task, not just at the end. Flag files are session-scoped (`/tmp/.cc-ctx-trigger-{session_id}`), so multiple Claude Code instances don't interfere.
+This happens inside the agentic loop — Claude receives your custom instructions mid-task, not just at the end. Files are session-scoped, so multiple Claude Code instances don't interfere.
+
+### How the bridge composes with other statusLine tools
+
+The bridge is a transparent pipe prefix. If you already have a statusLine tool like [ccstatusline](https://github.com/sirmalloc/ccstatusline), the installer automatically prepends the bridge:
+
+```
+bridge.sh | bunx ccstatusline@latest
+```
+
+The bridge extracts percentage data from stdin, writes it to a file, and passes the full JSON through to your existing tool unchanged. No wrapper scripts or manual configuration needed.
 
 ### Compaction handling
 
-After `/compact` or auto-compaction, the `session_id` stays the same but context drops sharply. A `SessionStart` reset handler clears stale flag files and plants a compaction marker — if a late-running statusline tries to re-create flags with pre-compaction data, it sees the marker and resets instead.
-
-### Hook event options
-
-| Event | When it fires | Trade-off |
-|-------|--------------|-----------|
-| `PreToolUse` | Before every tool call | Mid-loop coverage. Runs frequently — adds ~25ms per tool call. **Default.** |
-| `PostToolUse` | After every tool call | Same coverage, fires after instead of before. |
-| `UserPromptSubmit` | Once per user prompt | Zero overhead during agentic loops, but no mid-loop coverage. |
-
-Switch with: `./install.sh --hook-event <event>`
+After `/compact` or auto-compaction, the `session_id` stays the same but context drops sharply. A `SessionStart` reset handler clears stale state files and plants a compaction marker — if the bridge writes percentage data before the evaluator runs, the evaluator sees the marker and resets instead of using stale data.
 
 ## Templates
 
-Ready-to-use configurations that install hooks and config on top of this tool. Install commands are in [Quick Install](#quick-install) above.
+Ready-to-use configurations that install hooks and config on top of the base system. One template active at a time — installing a new one replaces the previous.
 
 ### simple-session-memory
 
@@ -120,42 +134,6 @@ new session  → hook detects pending Handoff, signals incoming agent
 ```
 
 See [`templates/apm-handoff/README.md`](templates/apm-handoff/README.md) for full details.
-
-## Handling Conflicts
-<details>
-  
-Claude Code only supports **one** `statusLine` command. If you're using another statusline tool like [ccstatusline](https://github.com/sirmalloc/ccstatusline), this tool can work alongside it — you just need to ensure the flag-writing logic runs.
-  
-### Option 1: Wrap (recommended)
-
-Create a wrapper script that calls both:
-
-```bash
-#!/usr/bin/env bash
-# ~/.claude/statusline-wrapper.sh
-INPUT=$(cat)
-echo "$INPUT" | /path/to/other/statusline.sh
-echo "$INPUT" | ~/.claude/cc-context-awareness/context-awareness-statusline.sh
-```
-
-Point your `settings.json` at the wrapper:
-```json
-{"statusLine": {"type": "command", "command": "~/.claude/statusline-wrapper.sh"}}
-```
-
-**[ccstatusline](https://github.com/sirmalloc/ccstatusline) users:** Use `bunx ccstatusline@latest` as the other statusline. To avoid a duplicate context display, redirect ours: `echo "$INPUT" | ~/.claude/cc-context-awareness/context-awareness-statusline.sh > /dev/null` — this keeps the flag-writing active without showing the bar.
-
-### Option 2: Merge
-
-Copy the flag-writing logic into your own statusline. The critical part is writing to `/tmp/.cc-ctx-trigger-{session_id}` when thresholds are crossed.
-
-<strong>Installer behavior:</strong> No existing statusLine → adds ours. Another tool's statusLine → prints merge instructions. `--overwrite` → replaces it.
-
-### Hooks and settings
-
-Hooks are additive — the installer appends without replacing existing hooks, checks for duplicates, and on uninstall removes only its own entries. If `settings.json` contains invalid JSON, the installer prints an error and skips modification.
-
-</details>
 
 ## Use Cases
 
@@ -195,10 +173,10 @@ The default configuration warns at 80% context usage with a message telling Clau
 
 ### Graduated multi-tier warnings
 
-Add thresholds at 60%, 80%, and 95% with escalating urgency. For example: 
+Add thresholds at 60%, 80%, and 95% with escalating urgency. For example:
 - At 60%, Claude mentions context is getting used up.
-- At 80%, it actively suggests compaction. 
-- At 95%, it stops what it's doing and insists on wrapping up or compacting. 
+- At 80%, it actively suggests compaction.
+- At 95%, it stops what it's doing and insists on wrapping up or compacting.
 
 Useful for long coding sessions where you want progressive nudges rather than a single alarm.
 
@@ -252,9 +230,9 @@ This ensures the agent wraps up cleanly before compaction, rather than getting c
 
 <details>
 
-Config file: `~/.claude/cc-context-awareness/config.json`
+Config file: `.claude/cc-context-awareness/config.json` (local) or `~/.claude/cc-context-awareness/config.json` (global).
 
-By default, an agent skill is installed that teaches Claude the full config schema (see [Agent Skill](#agent-skill)). If you installed with `--no-skill`, a standalone configuration guide is placed at `~/.claude/cc-context-awareness/configuration-guide.md` instead.
+By default, an agent skill is installed that teaches Claude the full config schema (see [Agent Skill](#agent-skill)). If you installed with `--no-skill`, a standalone configuration guide is placed at `.claude/cc-context-awareness/configuration-guide.md` instead.
 
 ### Default Configuration
 
@@ -268,17 +246,6 @@ By default, an agent skill is installed that teaches Claude the full config sche
     }
   ],
   "repeat_mode": "once_per_tier_reset_on_compaction",
-  "statusline": {
-    "enabled": true,
-    "bar_width": 20,
-    "bar_filled": "█",
-    "bar_empty": "░",
-    "format": "context {bar} {percentage}%",
-    "color_normal": "37",
-    "color_warning": "31",
-    "warning_indicator": ""
-  },
-  "hook_event": "PreToolUse",
   "flag_dir": "/tmp"
 }
 ```
@@ -293,7 +260,7 @@ Each threshold triggers a warning when context usage reaches that percentage.
 |-------|------|-------------|
 | `percent` | number | Context usage percentage to trigger at (0–100) |
 | `level` | string | Unique tier identifier (e.g. `"warning"`, `"critical"`) |
-| `message` | string | Message injected into conversation. Supports `{percentage}` and `{remaining}` placeholders |
+| `message` | string | Message injected into conversation. Supports `{percentage}`, `{remaining}`, and `{session_id}` placeholders |
 
 #### `repeat_mode` (string)
 
@@ -302,29 +269,6 @@ Each threshold triggers a warning when context usage reaches that percentage.
 | `"once_per_tier_reset_on_compaction"` | Each tier fires once. Resets if usage drops below threshold. **Default.** |
 | `"once_per_tier"` | Each tier fires once per session. Never resets. |
 | `"every_turn"` | Fires on every turn while above the threshold. |
-
-#### `statusline` (object)
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `true` | Show the status line |
-| `bar_width` | number | `20` | Width of the progress bar in characters |
-| `bar_filled` | string | `"█"` | Character for filled portion |
-| `bar_empty` | string | `"░"` | Character for empty portion |
-| `format` | string | `"context {bar} {percentage}%"` | Format string. Supports `{bar}` and `{percentage}` |
-| `color_normal` | string | `"37"` | ANSI color code when below all thresholds (37=white) |
-| `color_warning` | string | `"31"` | ANSI color code when above any threshold (31=red) |
-| `warning_indicator` | string | `""` | Appended when above a threshold. Empty by default (color change is the indicator). |
-
-#### `hook_event` (string)
-
-Which Claude Code hook event triggers the context injection. Changing requires re-running the installer: `./install.sh --hook-event <event>`
-
-| Value | Behavior |
-|-------|----------|
-| `"PreToolUse"` | Before every tool call inside the agentic loop. **Default.** |
-| `"PostToolUse"` | After every tool call inside the agentic loop. |
-| `"UserPromptSubmit"` | Once per user prompt. No mid-loop coverage. |
 
 #### `flag_dir` (string)
 
@@ -336,55 +280,48 @@ Directory for flag files. Default: `"/tmp"`.
 
 <details>
 
-By default, the installer adds an agent skill at `~/.claude/skills/configure-context-awareness/SKILL.md`. This teaches Claude the full config schema, examples, and conflict handling rules so you can say things like:
+By default, the installer adds an agent skill at `.claude/skills/configure-context-awareness/SKILL.md`. This teaches Claude the full config schema, examples, and conflict handling rules so you can say things like:
 
 - *"Add a critical warning at 95% context usage"*
-- *"Change the context bar to use simple ASCII characters"*
 - *"Make context warnings fire every turn"*
 
 If you'd rather not have the skill registered, install with `--no-skill`:
 
 ```bash
-./install.sh --no-skill
+npx cc-context-awareness install --no-skill
 ```
 
-This skips the skill and instead places a standalone configuration guide at `~/.claude/cc-context-awareness/configuration-guide.md`. You can point Claude to it manually:
-
-> Read `~/.claude/cc-context-awareness/configuration-guide.md` and help me change the warning threshold to 70%.
-
 </details>
+
+## CLI Commands
+
+```bash
+npx cc-context-awareness                     # Interactive menu
+npx cc-context-awareness install             # Install base (interactive template selection)
+npx cc-context-awareness install <template>  # Install a specific template
+npx cc-context-awareness remove <template>   # Remove a template
+npx cc-context-awareness list                # List available templates
+npx cc-context-awareness status              # Show what's installed
+npx cc-context-awareness uninstall           # Remove everything
+```
+
+Add `--global` to any command to target `~/.claude/` instead of `./.claude/`.
 
 ## Uninstall
 
 ```bash
-./uninstall.sh           # local (this project)
-./uninstall.sh --global  # global
-
-# Or via curl:
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/uninstall.sh | bash                  # local
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/uninstall.sh | bash -s -- --global   # global
+npx cc-context-awareness uninstall           # local
+npx cc-context-awareness uninstall --global  # global
 ```
 
-This removes all installed files (including the skill if installed), cleans up settings entries, and deletes flag files. Other hooks and settings are left intact.
-
-## Reinstalling / Upgrading
-
-Re-run the install script. It will update the scripts and guide but preserve your existing `config.json` customizations.
-
-```bash
-./install.sh           # local
-./install.sh --global  # global
-
-# Switch hook event on an existing install:
-./install.sh --hook-event UserPromptSubmit
-```
+This removes all installed files (including the skill and active template), cleans up settings entries, and deletes flag files. Other hooks and settings are left intact.
 
 ## Known Limitations
 
-- **One-turn delay**: The statusline writes a flag after each assistant message; the hook reads it on the next event. With `PreToolUse` (default) this is minimal; with `UserPromptSubmit` it's a full turn.
-- **Exclusive status line**: Claude Code supports one `statusLine` command. See [Handling Conflicts](#handling-conflicts).
+- **One-turn delay**: The bridge writes percentage data after each assistant message; the evaluator reads it on the next tool call. With `PreToolUse` (default) this delay is minimal.
 - **Requires `jq` and bash 3.2+** (satisfied by default on macOS and most Linux).
 - **Flag files in `/tmp`**: Small and ephemeral. Change `flag_dir` in config if `/tmp` is unavailable.
+- **One template at a time**: Installing a new template replaces the previous one.
 
 ## License
 

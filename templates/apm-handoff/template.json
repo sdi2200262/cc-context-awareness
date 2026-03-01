@@ -1,0 +1,12 @@
+{
+  "id": "apm-handoff",
+  "thresholds_file": "cc-context-awareness.thresholds.json",
+  "thresholds_level_prefix": "apm-handoff",
+  "hooks": [
+    { "event": "SessionStart", "matcher": "", "script": "hooks/detect-apm-handoff.sh" }
+  ],
+  "agents": [],
+  "directories": [],
+  "claude_snippet": "CLAUDE.snippet.md",
+  "claude_snippet_marker": "APM Automatic Handoff"
+}

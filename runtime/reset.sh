@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 # cc-context-awareness — Compaction reset handler
-# Clears stale flag files after /compact or auto-compaction.
+# Clears stale flag files and pct file after /compact or auto-compaction.
 # Registered as a SessionStart hook (matcher: "compact").
 
 set -euo pipefail
 
 # Read JSON from stdin and extract session_id
 SESSION_ID="$(cat | jq -r '.session_id // empty')"
-
 [[ -z "$SESSION_ID" ]] && exit 0
 
 # Determine config file location (local takes precedence over global)
@@ -26,11 +25,9 @@ else
   FLAG_DIR="/tmp"
 fi
 
-# Remove stale flag files for this session
-rm -f "${FLAG_DIR}/.cc-ctx-trigger-${SESSION_ID}"
+# Remove stale flag files and pct file for this session
+rm -f "/tmp/.cc-ctx-pct-${SESSION_ID}"
 rm -f "${FLAG_DIR}/.cc-ctx-fired-${SESSION_ID}"
 
-# Plant compaction marker so the statusline knows to skip stale writes.
-# Without this, a late-running statusline (from the last pre-compaction message)
-# can re-create the trigger file with stale percentage data after we've cleaned up.
+# Plant compaction marker so check-thresholds knows to skip stale writes.
 touch "${FLAG_DIR}/.cc-ctx-compacted-${SESSION_ID}"

@@ -1,0 +1,16 @@
+{
+  "templates": [
+    {
+      "id": "simple-session-memory",
+      "name": "Simple Session Memory",
+      "description": "Memory logs at 50/65/80%, restored after compaction",
+      "version": "1.0.0"
+    },
+    {
+      "id": "apm-handoff",
+      "name": "APM Handoff",
+      "description": "Automatic Handoff triggers for APM agents at 70%",
+      "version": "1.0.0"
+    }
+  ]
+}

@@ -7,16 +7,5 @@
     }
   ],
   "repeat_mode": "once_per_tier_reset_on_compaction",
-  "statusline": {
-    "enabled": true,
-    "bar_width": 20,
-    "bar_filled": "█",
-    "bar_empty": "░",
-    "format": "context {bar} {percentage}%",
-    "color_normal": "37",
-    "color_warning": "31",
-    "warning_indicator": ""
-  },
-  "hook_event": "PreToolUse",
   "flag_dir": "/tmp"
 }

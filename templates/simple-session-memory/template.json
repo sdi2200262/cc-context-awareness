@@ -1,0 +1,15 @@
+{
+  "id": "simple-session-memory",
+  "thresholds_file": "cc-context-awareness.thresholds.json",
+  "thresholds_level_prefix": "memory-",
+  "hooks": [
+    { "event": "SessionStart", "matcher": "compact", "script": "hooks/session-start.sh" },
+    { "event": "SessionStart", "matcher": "compact", "script": "hooks/archival.sh" }
+  ],
+  "agents": [
+    { "source": "agents/memory-archiver.md", "dest": "agents/memory-archiver.md" }
+  ],
+  "directories": ["memory", "memory/archive"],
+  "claude_snippet": "CLAUDE.snippet.md",
+  "claude_snippet_marker": "Session Memory System"
+}

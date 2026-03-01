@@ -24,7 +24,7 @@ The Planner does not support Handoff (single session by design). Instead, it is 
 
 ## How It Works
 
-**Threshold trigger** - cc-context-awareness monitors context usage via the Claude Code status line and injects messages when thresholds are crossed. This template adds a single threshold that fires at 70%. The agent self-identifies its type and follows the matching instruction - Manager reads `/apm-6-handoff-manager`, Worker reads `/apm-7-handoff-worker`.
+**Threshold trigger** - cc-context-awareness monitors context usage via a statusLine bridge and evaluates thresholds when hooks fire. This template adds a single threshold that fires at 70%. The agent self-identifies its type and follows the matching instruction - Manager reads `/apm-6-handoff-manager`, Worker reads `/apm-7-handoff-worker`.
 
 **Handoff detection hook** - a `SessionStart` hook runs when any new session begins. It checks `.apm/bus/` for non-empty `apm-handoff.md` files. If found, it injects an `additionalContext` signal listing which agents have pending Handoffs. The agent's initiation command then handles the full Handoff processing - the hook is a deterministic safety net, not a replacement for APM's own detection.
 
@@ -32,27 +32,19 @@ The template does not perform the Handoff itself - APM's own Handoff commands ([
 
 ## Requirements
 
-- [cc-context-awareness](https://github.com/sdi2200262/cc-context-awareness) (installed automatically if not present)
+- [cc-context-awareness](https://github.com/sdi2200262/cc-context-awareness) (installed automatically)
 - [APM](https://github.com/sdi2200262/agentic-project-management) v1.0.0-dev installed in your workspace
-- [`jq`](https://jqlang.github.io/jq/download/)
+- [`jq`](https://jqlang.github.io/jq/download/) (runtime dependency)
+- [Node.js](https://nodejs.org/) >= 18 (for `npx`)
 
 ## Install
 
-**From GitHub (curl):**
-
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/apm-handoff/install.sh | bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/apm-handoff/install.sh | bash -s -- --global  # global
+npx cc-context-awareness install apm-handoff
+npx cc-context-awareness install apm-handoff --global  # global
 ```
 
-**From a local clone:**
-
-```bash
-./templates/apm-handoff/install.sh           # local (this project)
-./templates/apm-handoff/install.sh --global  # global (all projects)
-```
-
-Restart Claude Code after installing.
+The base system is installed automatically if not already present. Restart Claude Code after installing.
 
 ### Install Options
 
@@ -102,12 +94,8 @@ Find the entry with `"level": "apm-handoff"` and change the `"percent"` value.
 ## Uninstall
 
 ```bash
-./templates/apm-handoff/uninstall.sh           # local
-./templates/apm-handoff/uninstall.sh --global  # global
-
-# Or via curl:
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/apm-handoff/uninstall.sh | bash
-curl -fsSL https://raw.githubusercontent.com/sdi2200262/cc-context-awareness/main/templates/apm-handoff/uninstall.sh | bash -s -- --global
+npx cc-context-awareness remove apm-handoff
+npx cc-context-awareness remove apm-handoff --global  # global
 ```
 
 If you appended Handoff instructions to `CLAUDE.md`, remove them manually.

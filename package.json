@@ -1,0 +1,37 @@
+{
+  "name": "cc-context-awareness",
+  "version": "1.0.0",
+  "description": "Configurable context window thresholds for Claude Code",
+  "type": "module",
+  "bin": {
+    "cc-context-awareness": "src/index.js"
+  },
+  "files": [
+    "src/",
+    "runtime/",
+    "templates/",
+    "docs/",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sdi2200262/cc-context-awareness.git"
+  },
+  "keywords": [
+    "claude-code",
+    "context-window",
+    "thresholds",
+    "cli"
+  ],
+  "author": "CobuterMan <haidemenoss@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "@inquirer/prompts": "^7.9.0",
+    "chalk": "^5.6.2",
+    "commander": "^11.1.0",
+    "fs-extra": "^11.2.0"
+  }
+}
