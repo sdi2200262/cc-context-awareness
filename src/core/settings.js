@@ -54,7 +54,7 @@ export function setStatusLine(settings, bridgePath) {
   const bridgeCmd = bridgePath;
 
   if (!settings.statusLine) {
-    settings.statusLine = bridgeCmd;
+    settings.statusLine = { command: bridgeCmd };
     return { action: 'created', command: bridgeCmd, settings };
   }
 
@@ -70,7 +70,7 @@ export function setStatusLine(settings, bridgePath) {
 
   // Prepend bridge as pipe
   const piped = `${bridgePath} | ${existing}`;
-  settings.statusLine = piped;
+  settings.statusLine = { command: piped };
   return { action: 'prepended', command: piped, settings };
 }
 
@@ -106,7 +106,7 @@ export function removeStatusLine(settings, bridgePath) {
   // Restore downstream (remove "bridge.sh | " prefix)
   const downstream = trimmed.replace(/^\|\s*/, '').replace(/\s*\|\s*$/, '');
   if (downstream) {
-    settings.statusLine = downstream;
+    settings.statusLine = { command: downstream };
     return { action: 'restored', settings };
   }
 
