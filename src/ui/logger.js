@@ -4,6 +4,7 @@
  */
 
 import chalk from 'chalk';
+import { CLI_VERSION } from '../core/constants.js';
 
 const LOG_LEVELS = {
   INFO: chalk.white,
@@ -89,18 +90,17 @@ export function blank() {
  * @param {number} [length=50]
  */
 export function line(length = 50) {
-  console.log(chalk.gray('─'.repeat(length)));
+  console.log(chalk.gray('\u2500'.repeat(length)));
 }
 
 /** Print the CLI banner with name, version, and tagline. */
 export function banner() {
-  const pkg = { version: '1.0.0' };
   const tagline = 'Tell Claude what to do based on how much context it has used.';
   console.log('');
-  console.log(chalk.white.bold('cc-context-awareness') + chalk.gray(` v${pkg.version}`) + chalk.dim('  — by CobuterMan 🖥'));
+  console.log(chalk.white.bold('cc-context-awareness') + chalk.gray(` v${CLI_VERSION}`) + chalk.dim('  \u2014 by CobuterMan \ud83d\udda5'));
   console.log(chalk.gray(tagline));
   console.log('');
-  console.log(chalk.gray('─'.repeat(tagline.length)));
+  console.log(chalk.gray('\u2500'.repeat(tagline.length)));
   console.log('');
 }
 

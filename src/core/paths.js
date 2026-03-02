@@ -39,11 +39,11 @@ export function getRuntimeDir() {
 }
 
 /**
- * Resolves templates/ directory within the npm package.
+ * Resolves the catalog.json path within the npm package.
  * @returns {string}
  */
-export function getTemplatesDir() {
-  return path.join(PKG_ROOT, 'templates');
+export function getCatalogPath() {
+  return path.join(PKG_ROOT, 'catalog.json');
 }
 
 /**

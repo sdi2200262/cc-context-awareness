@@ -12,6 +12,9 @@ export const CLIErrorCode = {
   ALREADY_INSTALLED: 'ALREADY_INSTALLED',
   NOTHING_TO_REMOVE: 'NOTHING_TO_REMOVE',
   NOT_INSTALLED: 'NOT_INSTALLED',
+  NETWORK_ERROR: 'NETWORK_ERROR',
+  DOWNLOAD_FAILED: 'DOWNLOAD_FAILED',
+  NO_RELEASES_FOUND: 'NO_RELEASES_FOUND',
 };
 
 export class CLIError extends Error {
@@ -86,6 +89,44 @@ export class CLIError extends Error {
     return new CLIError(
       'cc-context-awareness is not installed here.',
       CLIErrorCode.NOT_INSTALLED
+    );
+  }
+
+  /**
+   * @param {string} url
+   * @param {string} reason
+   * @returns {CLIError}
+   */
+  static networkError(url, reason) {
+    return new CLIError(
+      `Network error fetching ${url}: ${reason}`,
+      CLIErrorCode.NETWORK_ERROR,
+      { url, reason }
+    );
+  }
+
+  /**
+   * @param {string} url
+   * @param {string} reason
+   * @returns {CLIError}
+   */
+  static downloadFailed(url, reason) {
+    return new CLIError(
+      `Failed to download asset from ${url}: ${reason}`,
+      CLIErrorCode.DOWNLOAD_FAILED,
+      { url, reason }
+    );
+  }
+
+  /**
+   * @param {string} templateId
+   * @returns {CLIError}
+   */
+  static noReleasesFound(templateId) {
+    return new CLIError(
+      `No releases found for template "${templateId}". Check https://github.com/sdi2200262/cc-context-awareness/releases`,
+      CLIErrorCode.NO_RELEASES_FOUND,
+      { templateId }
     );
   }
 }

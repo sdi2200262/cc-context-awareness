@@ -1,6 +1,6 @@
 {
   "name": "cc-context-awareness",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Configurable context window thresholds for Claude Code",
   "type": "module",
   "bin": {
@@ -9,7 +9,7 @@
   "files": [
     "src/",
     "runtime/",
-    "templates/",
+    "catalog.json",
     "docs/",
     "LICENSE"
   ],

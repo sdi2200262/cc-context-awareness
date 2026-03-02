@@ -30,15 +30,15 @@ You will be given:
    - Discard resolved in-progress state, redundancy, and noise
    - Write it as a coherent narrative a future session can use to reconstruct history
    - Include a date range header showing the span of sessions covered
-3. **Create** the archive directory (`.claude/memory/archive/`) if it does not exist.
-4. **Write** the synthesized archive to the target path.
-5. **Update** `.claude/memory/index.md`:
+3. **Write** the synthesized archive to the target path. The Write tool creates parent directories automatically — do NOT use Bash mkdir.
+4. **Update** `.claude/memory/index.md`:
    - Remove the archived session rows from the main table
    - Add a row for the new archive in the Archives section (create the section if missing) showing the date range it covers
-6. **Delete** the source files listed in your instructions.
+5. **Delete** the source files using Bash. Delete each file individually with the exact command format: `rm .claude/memory/<filename>`. Use relative paths — never absolute paths. Example: `rm .claude/memory/session-2026-01-15-003.md`
 
 ## Important
 
 - The newest session log is NOT in your file list and must NOT be deleted.
 - Write the archive as a single coherent document, not a concatenation of individual logs.
 - Keep the archive concise but preserve all information that would be useful to a future session.
+- **Bash commands**: Always use relative paths starting with `.claude/`. Never use absolute paths, `rm -f`, or `rm -rf`. The only permitted Bash pattern is `rm .claude/memory/session-*.md` (one file per command).

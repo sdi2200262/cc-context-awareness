@@ -1,0 +1,94 @@
+name: Release Template
+
+on:
+  workflow_dispatch:
+    inputs:
+      template_id:
+        description: 'Template ID (e.g. simple-session-memory)'
+        required: true
+        type: string
+      version:
+        description: 'Version (e.g. 1.0.0). Leave empty to auto-increment patch.'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate template exists
+        run: |
+          if [ ! -d "templates/${{ inputs.template_id }}" ]; then
+            echo "::error::Template directory templates/${{ inputs.template_id }} not found"
+            exit 1
+          fi
+          if [ ! -f "templates/${{ inputs.template_id }}/template.json" ]; then
+            echo "::error::template.json not found in templates/${{ inputs.template_id }}"
+            exit 1
+          fi
+
+      - name: Determine version
+        id: version
+        run: |
+          TEMPLATE_ID="${{ inputs.template_id }}"
+          INPUT_VERSION="${{ inputs.version }}"
+
+          if [ -n "$INPUT_VERSION" ]; then
+            echo "version=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+          else
+            # Auto-increment: find latest tag matching {template_id}-v*
+            LATEST_TAG=$(git tag -l "${TEMPLATE_ID}-v*" --sort=-v:refname | head -n1)
+            if [ -z "$LATEST_TAG" ]; then
+              echo "version=1.0.0" >> "$GITHUB_OUTPUT"
+            else
+              # Extract version and increment patch
+              CURRENT=$(echo "$LATEST_TAG" | sed "s/${TEMPLATE_ID}-v//")
+              MAJOR=$(echo "$CURRENT" | cut -d. -f1)
+              MINOR=$(echo "$CURRENT" | cut -d. -f2)
+              PATCH=$(echo "$CURRENT" | cut -d. -f3 | cut -d- -f1)
+              PATCH=$((PATCH + 1))
+              echo "version=${MAJOR}.${MINOR}.${PATCH}" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Create tarball
+        run: |
+          TEMPLATE_ID="${{ inputs.template_id }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          FILENAME="${TEMPLATE_ID}-v${VERSION}.tar.gz"
+          tar czf "$FILENAME" -C templates "$TEMPLATE_ID"
+          echo "FILENAME=$FILENAME" >> "$GITHUB_ENV"
+
+      - name: Create tag and release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TEMPLATE_ID="${{ inputs.template_id }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${TEMPLATE_ID}-v${VERSION}"
+          FILENAME="${{ env.FILENAME }}"
+
+          # Detect pre-release
+          PRERELEASE_FLAG=""
+          if echo "$VERSION" | grep -q '-'; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          # Create tag
+          git tag "$TAG"
+          git push origin "$TAG"
+
+          # Create release with asset
+          gh release create "$TAG" \
+            "$FILENAME" \
+            --title "${TEMPLATE_ID} v${VERSION}" \
+            --notes "Template release: ${TEMPLATE_ID} v${VERSION}" \
+            $PRERELEASE_FLAG

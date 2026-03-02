@@ -8,8 +8,8 @@ import path from 'path';
 import logger from '../ui/logger.js';
 import { getPaths } from '../core/paths.js';
 import { removeThresholdsByPrefix } from '../core/config.js';
-import { readSettings, writeSettings, removeHook } from '../core/settings.js';
-import { loadTemplateManifest, getTemplateDir } from '../core/templates.js';
+import { readSettings, writeSettings, removeHook, removePermissions } from '../core/settings.js';
+import { loadLocalManifest } from '../core/templates.js';
 import { CLIError } from '../core/errors.js';
 
 /**
@@ -45,6 +45,7 @@ export async function removeCommand(templateId, options = {}) {
 
   // Update metadata
   meta.activeTemplate = null;
+  meta.activeTemplateVersion = null;
   await fs.writeJson(paths.metaFile, meta, { spaces: 2 });
 
   logger.blank();
@@ -54,17 +55,18 @@ export async function removeCommand(templateId, options = {}) {
 
 /**
  * Remove all assets for a template. Used by both remove and install (when switching).
+ * Reads manifest from local install dir (saved during install), falls back to best-effort.
  * @param {string} templateId
  * @param {Object} paths
  */
 export async function removeTemplateAssets(templateId, paths) {
-  let manifest;
-  try {
-    manifest = await loadTemplateManifest(templateId);
-  } catch {
-    // If manifest can't be loaded, do best-effort cleanup
+  const templateInstallDir = path.join(paths.claudeDir, templateId);
+
+  // Try to load the locally saved manifest
+  let manifest = await loadLocalManifest(templateInstallDir);
+  if (!manifest) {
+    // Best-effort cleanup if manifest not found (v1.0.0 → v1.1.0 migration)
     logger.warn(`Could not load manifest for ${templateId}, doing best-effort cleanup`);
-    const templateInstallDir = path.join(paths.claudeDir, templateId);
     if (await fs.pathExists(templateInstallDir)) {
       await fs.remove(templateInstallDir);
     }
@@ -83,7 +85,6 @@ export async function removeTemplateAssets(templateId, paths) {
 
   // 2. Remove hooks from settings
   if (manifest.hooks && manifest.hooks.length > 0) {
-    const templateInstallDir = path.join(paths.claudeDir, templateId);
     for (const hook of manifest.hooks) {
       const hookPath = path.join(templateInstallDir, hook.script);
       removeHook(settings, hookPath);
@@ -91,7 +92,15 @@ export async function removeTemplateAssets(templateId, paths) {
     logger.info('Removed hooks from settings');
   }
 
-  // 3. Remove agents
+  // 3. Remove permissions
+  if (manifest.permissions && manifest.permissions.length > 0) {
+    const removed = removePermissions(settings, manifest.permissions);
+    if (removed > 0) {
+      logger.info(`Removed ${removed} permission patterns`);
+    }
+  }
+
+  // 4. Remove agents
   if (manifest.agents && manifest.agents.length > 0) {
     for (const agent of manifest.agents) {
       const agentPath = path.join(paths.claudeDir, agent.dest);
@@ -108,11 +117,10 @@ export async function removeTemplateAssets(templateId, paths) {
     }
   }
 
-  // 4. Write updated settings
+  // 5. Write updated settings
   await writeSettings(paths.settingsFile, settings);
 
-  // 5. Remove template install directory
-  const templateInstallDir = path.join(paths.claudeDir, templateId);
+  // 6. Remove template install directory
   if (await fs.pathExists(templateInstallDir)) {
     await fs.remove(templateInstallDir);
   }

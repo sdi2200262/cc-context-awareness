@@ -1,0 +1,15 @@
+{
+  "repository": { "owner": "sdi2200262", "repo": "cc-context-awareness" },
+  "templates": [
+    {
+      "id": "simple-session-memory",
+      "name": "Simple Session Memory",
+      "description": "Memory logs at 50/65/80%, restored after compaction"
+    },
+    {
+      "id": "apm-handoff",
+      "name": "APM Handoff",
+      "description": "Automatic Handoff triggers for APM agents at 70%"
+    }
+  ]
+}

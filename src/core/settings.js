@@ -141,6 +141,52 @@ export function addHook(settings, event, matcher, commandPath) {
 }
 
 /**
+ * Merge permission patterns into settings.permissions.allow[], deduplicating.
+ * @param {Object} settings
+ * @param {string[]} permissions - Array of permission patterns (e.g. "Read(.claude/memory/**)")
+ * @returns {number} Number of new permissions added
+ */
+export function addPermissions(settings, permissions) {
+  if (!permissions || permissions.length === 0) return 0;
+  if (!settings.permissions) settings.permissions = {};
+  if (!Array.isArray(settings.permissions.allow)) settings.permissions.allow = [];
+
+  let added = 0;
+  for (const perm of permissions) {
+    if (!settings.permissions.allow.includes(perm)) {
+      settings.permissions.allow.push(perm);
+      added++;
+    }
+  }
+  return added;
+}
+
+/**
+ * Remove specific permission patterns from settings.permissions.allow[].
+ * Cleans up empty arrays/objects.
+ * @param {Object} settings
+ * @param {string[]} permissions - Patterns to remove
+ * @returns {number} Number of permissions removed
+ */
+export function removePermissions(settings, permissions) {
+  if (!permissions || permissions.length === 0) return 0;
+  if (!settings.permissions?.allow) return 0;
+
+  const before = settings.permissions.allow.length;
+  settings.permissions.allow = settings.permissions.allow.filter(p => !permissions.includes(p));
+  const removed = before - settings.permissions.allow.length;
+
+  // Clean up empty structures
+  if (settings.permissions.allow.length === 0) {
+    delete settings.permissions.allow;
+  }
+  if (Object.keys(settings.permissions).length === 0) {
+    delete settings.permissions;
+  }
+  return removed;
+}
+
+/**
  * Remove a hook by command path. Cleans empty event arrays and hooks object.
  * @param {Object} settings
  * @param {string} commandPath

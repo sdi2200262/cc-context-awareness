@@ -45,7 +45,8 @@ export async function statusCommand(options = {}) {
   logger.blank();
 
   if (meta.activeTemplate) {
-    logger.info(`Active template: ${logger.chalk.white.bold(meta.activeTemplate)}`);
+    const versionSuffix = meta.activeTemplateVersion ? ` v${meta.activeTemplateVersion}` : '';
+    logger.info(`Active template: ${logger.chalk.white.bold(meta.activeTemplate)}${versionSuffix}`);
   } else {
     logger.info('Active template: none');
   }

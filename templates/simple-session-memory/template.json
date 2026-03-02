@@ -10,6 +10,9 @@
     { "source": "agents/memory-archiver.md", "dest": "agents/memory-archiver.md" }
   ],
   "directories": ["memory", "memory/archive"],
+  "permissions": [
+    "Bash(rm .claude/memory/session-*)"
+  ],
   "claude_snippet": "CLAUDE.snippet.md",
   "claude_snippet_marker": "Session Memory System"
 }

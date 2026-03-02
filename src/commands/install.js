@@ -9,9 +9,11 @@ import logger from '../ui/logger.js';
 import { selectTemplate } from '../ui/prompts.js';
 import { getPaths, getRuntimeDir, getDocsDir } from '../core/paths.js';
 import { readConfig, writeConfig, createDefaultConfig, upsertThresholds } from '../core/config.js';
-import { readSettings, writeSettings, setStatusLine, removeStatusLine, addHook, removeHook } from '../core/settings.js';
-import { loadCatalog, loadTemplateManifest, getTemplateDir } from '../core/templates.js';
+import { readSettings, writeSettings, setStatusLine, removeStatusLine, addHook, removeHook, addPermissions } from '../core/settings.js';
+import { loadCatalog, fetchAndExtractTemplate } from '../core/templates.js';
+import { cleanup } from '../services/extractor.js';
 import { CLIError } from '../core/errors.js';
+import { CLI_VERSION } from '../core/constants.js';
 import { removeTemplateAssets } from './remove.js';
 
 /**
@@ -109,9 +111,10 @@ async function installBase(paths, scope, options) {
 
   // Save install metadata
   await fs.writeJson(paths.metaFile, {
-    version: '1.0.0',
+    version: CLI_VERSION,
     scope,
     activeTemplate: null,
+    activeTemplateVersion: null,
     installedAt: new Date().toISOString(),
   }, { spaces: 2 });
 
@@ -138,20 +141,17 @@ async function ensureBaseInstalled(paths, scope, options) {
 }
 
 /**
- * Install a template by id — upserts thresholds, registers hooks/agents, patches CLAUDE.md.
+ * Install a template by id — fetches from GitHub Releases, then installs assets.
  * @param {string} templateId
  * @param {Object} paths - Resolved install paths from getPaths().
  * @param {string} scope - "local" or "global".
  * @param {Object} options - CLI options.
  */
 async function installTemplate(templateId, paths, scope, options) {
-  // Validate template exists
+  // Validate template exists in catalog
   const catalog = await loadCatalog();
   const entry = catalog.templates.find(t => t.id === templateId);
   if (!entry) throw CLIError.templateNotFound(templateId);
-
-  const manifest = await loadTemplateManifest(templateId);
-  const templateDir = getTemplateDir(templateId);
 
   // Read install metadata
   const meta = await fs.readJson(paths.metaFile);
@@ -167,91 +167,115 @@ async function installTemplate(templateId, paths, scope, options) {
 
   logger.clearAndBanner();
   logger.info(`Installing template: ${entry.name} (${scope})...`);
+  logger.info('Fetching from GitHub Releases...');
 
-  const settings = await readSettings(paths.settingsFile);
+  // Fetch and extract from GitHub
+  const { tempDir, manifest, version } = await fetchAndExtractTemplate(templateId);
+  const templateDir = path.join(tempDir, templateId);
 
-  // 1. Upsert thresholds
-  if (manifest.thresholds_file) {
-    const thresholdsPath = path.join(templateDir, manifest.thresholds_file);
-    const newThresholds = await fs.readJson(thresholdsPath);
-    const result = await upsertThresholds(paths.configFile, newThresholds);
-    const levels = newThresholds.map(t => t.level).join(', ');
-    logger.success(`Added ${newThresholds.length} thresholds (${levels})`);
-  }
+  try {
+    const settings = await readSettings(paths.settingsFile);
 
-  // 2. Register hooks
-  if (manifest.hooks && manifest.hooks.length > 0) {
-    logger.info('Registering hooks...');
-    const templateInstallDir = path.join(paths.claudeDir, templateId);
-    await fs.ensureDir(path.join(templateInstallDir, 'hooks'));
-
-    for (const hook of manifest.hooks) {
-      const srcScript = path.join(templateDir, hook.script);
-      const destScript = path.join(templateInstallDir, hook.script);
-      await fs.ensureDir(path.dirname(destScript));
-      await fs.copy(srcScript, destScript);
-      await fs.chmod(destScript, 0o755);
-
-      addHook(settings, hook.event, hook.matcher, destScript);
-      logger.success(`Registered ${hook.script}`);
+    // 1. Upsert thresholds
+    if (manifest.thresholds_file) {
+      const thresholdsPath = path.join(templateDir, manifest.thresholds_file);
+      const newThresholds = await fs.readJson(thresholdsPath);
+      const result = await upsertThresholds(paths.configFile, newThresholds);
+      const levels = newThresholds.map(t => t.level).join(', ');
+      logger.success(`Added ${newThresholds.length} thresholds (${levels})`);
     }
-  }
 
-  // 3. Install agents
-  if (manifest.agents && manifest.agents.length > 0) {
-    logger.info('Installing agents...');
-    for (const agent of manifest.agents) {
-      const srcAgent = path.join(templateDir, agent.source);
-      const destAgent = path.join(paths.claudeDir, agent.dest);
-      await fs.ensureDir(path.dirname(destAgent));
-      await fs.copy(srcAgent, destAgent);
-      logger.success(`Installed ${path.basename(agent.dest)}`);
-    }
-  }
+    // 2. Register hooks
+    if (manifest.hooks && manifest.hooks.length > 0) {
+      logger.info('Registering hooks...');
+      const templateInstallDir = path.join(paths.claudeDir, templateId);
+      await fs.ensureDir(path.join(templateInstallDir, 'hooks'));
 
-  // 4. Create directories
-  if (manifest.directories && manifest.directories.length > 0) {
-    logger.info('Creating directories...');
-    for (const dir of manifest.directories) {
-      const dirPath = path.join(paths.claudeDir, dir);
-      await fs.ensureDir(dirPath);
-    }
-    const dirList = manifest.directories.map(d => `.claude/${d}/`).join(', ');
-    logger.success(`Created ${dirList}`);
-  }
+      for (const hook of manifest.hooks) {
+        const srcScript = path.join(templateDir, hook.script);
+        const destScript = path.join(templateInstallDir, hook.script);
+        await fs.ensureDir(path.dirname(destScript));
+        await fs.copy(srcScript, destScript);
+        await fs.chmod(destScript, 0o755);
 
-  // 5. Write settings
-  await writeSettings(paths.settingsFile, settings);
-
-  // 6. Patch CLAUDE.md
-  if (!options.noClaudeMd && manifest.claude_snippet) {
-    const snippetPath = path.join(templateDir, manifest.claude_snippet);
-    const claudeMdPath = path.join(process.cwd(), 'CLAUDE.md');
-    const marker = manifest.claude_snippet_marker;
-
-    if (await fs.pathExists(snippetPath)) {
-      const snippet = await fs.readFile(snippetPath, 'utf-8');
-
-      if (await fs.pathExists(claudeMdPath)) {
-        const existing = await fs.readFile(claudeMdPath, 'utf-8');
-        if (marker && existing.includes(marker)) {
-          logger.info('CLAUDE.md: instructions already present (skipped)');
-        } else {
-          await fs.appendFile(claudeMdPath, `\n---\n\n${snippet}`);
-          logger.success('Appended instructions to CLAUDE.md');
-        }
-      } else {
-        await fs.writeFile(claudeMdPath, snippet);
-        logger.success('Created CLAUDE.md with template instructions');
+        addHook(settings, hook.event, hook.matcher, destScript);
+        logger.success(`Registered ${hook.script}`);
       }
     }
+
+    // 3. Install agents
+    if (manifest.agents && manifest.agents.length > 0) {
+      logger.info('Installing agents...');
+      for (const agent of manifest.agents) {
+        const srcAgent = path.join(templateDir, agent.source);
+        const destAgent = path.join(paths.claudeDir, agent.dest);
+        await fs.ensureDir(path.dirname(destAgent));
+        await fs.copy(srcAgent, destAgent);
+        logger.success(`Installed ${path.basename(agent.dest)}`);
+      }
+    }
+
+    // 4. Create directories
+    if (manifest.directories && manifest.directories.length > 0) {
+      logger.info('Creating directories...');
+      for (const dir of manifest.directories) {
+        const dirPath = path.join(paths.claudeDir, dir);
+        await fs.ensureDir(dirPath);
+      }
+      const dirList = manifest.directories.map(d => `.claude/${d}/`).join(', ');
+      logger.success(`Created ${dirList}`);
+    }
+
+    // 5. Add permissions from manifest
+    if (manifest.permissions && manifest.permissions.length > 0) {
+      const added = addPermissions(settings, manifest.permissions);
+      if (added > 0) {
+        logger.success(`Added ${added} permission patterns`);
+      }
+    }
+
+    // 6. Write settings
+    await writeSettings(paths.settingsFile, settings);
+
+    // 7. Save template.json locally (for remove without network)
+    const templateInstallDir = path.join(paths.claudeDir, templateId);
+    await fs.ensureDir(templateInstallDir);
+    await fs.writeJson(path.join(templateInstallDir, 'template.json'), manifest, { spaces: 2 });
+
+    // 8. Patch CLAUDE.md
+    if (!options.noClaudeMd && manifest.claude_snippet) {
+      const snippetPath = path.join(templateDir, manifest.claude_snippet);
+      const claudeMdPath = path.join(process.cwd(), 'CLAUDE.md');
+      const marker = manifest.claude_snippet_marker;
+
+      if (await fs.pathExists(snippetPath)) {
+        const snippet = await fs.readFile(snippetPath, 'utf-8');
+
+        if (await fs.pathExists(claudeMdPath)) {
+          const existing = await fs.readFile(claudeMdPath, 'utf-8');
+          if (marker && existing.includes(marker)) {
+            logger.info('CLAUDE.md: instructions already present (skipped)');
+          } else {
+            await fs.appendFile(claudeMdPath, `\n---\n\n${snippet}`);
+            logger.success('Appended instructions to CLAUDE.md');
+          }
+        } else {
+          await fs.writeFile(claudeMdPath, snippet);
+          logger.success('Created CLAUDE.md with template instructions');
+        }
+      }
+    }
+
+    // 9. Update install metadata
+    meta.activeTemplate = templateId;
+    meta.activeTemplateVersion = version;
+    await fs.writeJson(paths.metaFile, meta, { spaces: 2 });
+
+    logger.blank();
+    logger.success(`${entry.name} v${version} installed!`);
+    logger.dim('Restart Claude Code to activate.', { indent: true });
+  } finally {
+    // Clean up temp directory
+    cleanup(tempDir);
   }
-
-  // 7. Update install metadata
-  meta.activeTemplate = templateId;
-  await fs.writeJson(paths.metaFile, meta, { spaces: 2 });
-
-  logger.blank();
-  logger.success(`${entry.name} installed!`);
-  logger.dim('Restart Claude Code to activate.', { indent: true });
 }

@@ -5,6 +5,7 @@
  * @module src/index
  */
 
+import fs from 'fs-extra';
 import { program } from 'commander';
 import { installCommand } from './commands/install.js';
 import { removeCommand } from './commands/remove.js';
@@ -13,8 +14,32 @@ import { statusCommand } from './commands/status.js';
 import { uninstallCommand } from './commands/uninstall.js';
 import { selectAction, selectTemplate } from './ui/prompts.js';
 import { loadCatalog } from './core/templates.js';
+import { getPaths } from './core/paths.js';
 import { CLIError } from './core/errors.js';
+import { CLI_VERSION } from './core/constants.js';
 import logger from './ui/logger.js';
+
+/**
+ * Read install metadata to get active template info.
+ * @returns {Promise<{ activeTemplate: string|null, activeTemplateVersion: string|null }>}
+ */
+async function getInstallState() {
+  for (const global of [false, true]) {
+    const paths = getPaths(global);
+    try {
+      if (await fs.pathExists(paths.metaFile)) {
+        const meta = await fs.readJson(paths.metaFile);
+        return {
+          activeTemplate: meta.activeTemplate || null,
+          activeTemplateVersion: meta.activeTemplateVersion || null,
+        };
+      }
+    } catch {
+      // Ignore read errors
+    }
+  }
+  return { activeTemplate: null, activeTemplateVersion: null };
+}
 
 /**
  * Handle CLI errors — print message and exit.
@@ -35,7 +60,7 @@ function handleError(err) {
 program
   .name('cc-context-awareness')
   .description('Configurable context window thresholds for Claude Code')
-  .version('1.0.0');
+  .version(CLI_VERSION);
 
 program
   .command('install [template]')
@@ -48,7 +73,8 @@ program
       if (!template && process.stdin.isTTY) {
         // Interactive: ask if they want to pick a template
         const catalog = await loadCatalog();
-        const selected = await selectTemplate(catalog);
+        const { activeTemplate } = await getInstallState();
+        const selected = await selectTemplate(catalog, { activeTemplate });
         if (!selected) return; // user went back — nothing to go back to in subcommand mode
         await installCommand(selected, options);
       } else {
@@ -60,12 +86,28 @@ program
   });
 
 program
-  .command('remove <template>')
+  .command('remove [template]')
   .description('Remove a template')
   .option('--global', 'Target ~/.claude/')
   .action(async (template, options) => {
     try {
-      await removeCommand(template, options);
+      if (!template && process.stdin.isTTY) {
+        // Interactive: show only installed template
+        const catalog = await loadCatalog();
+        const { activeTemplate } = await getInstallState();
+        const selected = await selectTemplate(catalog, {
+          message: 'Which template would you like to remove?',
+          activeTemplate,
+          removeMode: true,
+        });
+        if (!selected) return;
+        await removeCommand(selected, options);
+      } else if (template) {
+        await removeCommand(template, options);
+      } else {
+        logger.error('Template name required in non-interactive mode.');
+        process.exit(1);
+      }
     } catch (err) {
       handleError(err);
     }
@@ -126,15 +168,25 @@ program.action(async () => {
           break;
         case 'install-template': {
           const catalog = await loadCatalog();
-          const selected = await selectTemplate(catalog);
+          const { activeTemplate } = await getInstallState();
+          const selected = await selectTemplate(catalog, { activeTemplate });
           if (!selected) { running = true; break; }
           await installCommand(selected, {});
           break;
         }
         case 'remove': {
           const catalog = await loadCatalog();
+          const { activeTemplate } = await getInstallState();
+          if (!activeTemplate) {
+            logger.clearAndBanner();
+            logger.info('No template is currently installed.');
+            running = true;
+            break;
+          }
           const selected = await selectTemplate(catalog, {
             message: 'Which template would you like to remove?',
+            activeTemplate,
+            removeMode: true,
           });
           if (!selected) { running = true; break; }
           await removeCommand(selected, {});
