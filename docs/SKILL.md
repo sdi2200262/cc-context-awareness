@@ -30,15 +30,36 @@ Always read the current config before making changes. Use the Edit tool — neve
 
 ### StatusLine composition
 
-The bridge script is a transparent pipe prefix that extracts percentage data from stdin and passes the original JSON through to any downstream statusLine tool. If the user has another statusLine tool (like [ccstatusline](https://github.com/sirmalloc/ccstatusline)), the bridge is automatically prepended:
+The bridge script is a transparent pipe prefix that extracts percentage data from stdin and passes the original JSON through to any downstream statusLine tool. When running standalone (no downstream pipe), the bridge suppresses output so the status line stays clean.
+
+If the user has another statusLine tool (like [ccstatusline](https://github.com/sirmalloc/ccstatusline)), the bridge is automatically prepended:
 
 ```
 bridge.sh | bunx ccstatusline@latest
 ```
 
-This happens automatically during install — no manual wrapper scripts needed. The bridge extracts and caches the percentage data, then passes the full JSON through unchanged.
+This happens automatically during install — no manual wrapper scripts needed. The bridge extracts and caches the percentage data, then passes the full JSON through unchanged. If no downstream tool is piped, the status line remains empty.
 
 If the user wants to remove cc-context-awareness while keeping their downstream tool, the uninstaller restores the original statusLine value.
+
+### Fixing a broken statusLine (another tool overwrote it)
+
+If the user installed cc-context-awareness first and then another statusLine tool overwrote the `statusLine` setting, the bridge will be missing and context tracking will stop working. To detect and fix this:
+
+1. Read `settings.local.json` (or `settings.json` for global)
+2. Check if `statusLine.command` contains the bridge path (`.claude/cc-context-awareness/bridge.sh`)
+3. If the bridge is missing, prepend it as a pipe prefix to the current command:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "/absolute/path/to/.claude/cc-context-awareness/bridge.sh | <existing-command>"
+  }
+}
+```
+
+The bridge passes stdin through unchanged, so any downstream tool still receives the full JSON. Only the bridge needs to be first in the pipe chain.
 
 ### Hooks
 

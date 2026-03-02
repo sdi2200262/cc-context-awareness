@@ -100,7 +100,20 @@ The bridge is a transparent pipe prefix. If you already have a statusLine tool l
 bridge.sh | bunx ccstatusline@latest
 ```
 
-The bridge extracts percentage data from stdin, writes it to a file, and passes the full JSON through to your existing tool unchanged. No wrapper scripts or manual configuration needed.
+The bridge extracts percentage data from stdin, writes it to a file, and passes the full JSON through to your existing tool unchanged. When running standalone (no downstream pipe), the bridge suppresses output so the status line stays clean — no raw JSON spill. No wrapper scripts or manual configuration needed.
+
+**If another tool overwrites statusLine after install:** The bridge will be missing and context tracking stops. To fix, prepend the bridge back as a pipe prefix in `settings.local.json`:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": ".claude/cc-context-awareness/bridge.sh | <your-other-tool>"
+  }
+}
+```
+
+The bridge must be first in the pipe chain. It passes stdin through unchanged, so downstream tools still receive the full JSON.
 
 ### Compaction handling
 
