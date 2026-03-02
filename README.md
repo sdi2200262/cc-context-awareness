@@ -9,15 +9,15 @@ Tell Claude what to do based on how much context it has used. Configurable thres
 ## Quick Install
 
 ```bash
-npx cc-context-awareness
+npx cc-context-awareness@latest
 ```
 
 This opens an interactive menu. Or install directly:
 
 ```bash
-npx cc-context-awareness install                          # install base system
-npx cc-context-awareness install simple-session-memory    # install a template
-npx cc-context-awareness install apm-handoff --global     # install globally
+npx cc-context-awareness@latest install                          # install base system
+npx cc-context-awareness@latest install simple-session-memory    # install a template
+npx cc-context-awareness@latest install apm-handoff --global     # install globally
 ```
 
 | Mode | Scripts | Settings | Use case |
@@ -35,8 +35,8 @@ Restart Claude Code after installing.
 Claude writes memory logs at 50/65/80% context, restores them after compaction, and archives old logs via a custom agent.
 
 ```bash
-npx cc-context-awareness install simple-session-memory
-npx cc-context-awareness install simple-session-memory --global  # global
+npx cc-context-awareness@latest install simple-session-memory
+npx cc-context-awareness@latest install simple-session-memory --global  # global
 ```
 
 See [Templates](#templates) for details.
@@ -49,8 +49,8 @@ See [Templates](#templates) for details.
 Agents never silently hit the context wall. At 70% context (configurable), the agent automatically initiates its Handoff procedure. A SessionStart hook then signals the incoming agent that a Handoff is pending. For use with [APM](https://github.com/sdi2200262/agentic-project-management) v1.0.0-dev.
 
 ```bash
-npx cc-context-awareness install apm-handoff
-npx cc-context-awareness install apm-handoff --global  # global
+npx cc-context-awareness@latest install apm-handoff
+npx cc-context-awareness@latest install apm-handoff --global  # global
 ```
 
 See [Templates](#templates) for details.
@@ -301,7 +301,7 @@ By default, the installer adds an agent skill at `.claude/skills/configure-conte
 If you'd rather not have the skill registered, install with `--no-skill`:
 
 ```bash
-npx cc-context-awareness install --no-skill
+npx cc-context-awareness@latest install --no-skill
 ```
 
 </details>
@@ -309,13 +309,13 @@ npx cc-context-awareness install --no-skill
 ## CLI Commands
 
 ```bash
-npx cc-context-awareness                     # Interactive menu
-npx cc-context-awareness install             # Install base (interactive template selection)
-npx cc-context-awareness install <template>  # Install a specific template
-npx cc-context-awareness remove <template>   # Remove a template
-npx cc-context-awareness list                # List available templates
-npx cc-context-awareness status              # Show what's installed
-npx cc-context-awareness uninstall           # Remove everything
+npx cc-context-awareness@latest                     # Interactive menu
+npx cc-context-awareness@latest install             # Install base (interactive template selection)
+npx cc-context-awareness@latest install <template>  # Install a specific template
+npx cc-context-awareness@latest remove <template>   # Remove a template
+npx cc-context-awareness@latest list                # List available templates
+npx cc-context-awareness@latest status              # Show what's installed
+npx cc-context-awareness@latest uninstall           # Remove everything
 ```
 
 Add `--global` to any command to target `~/.claude/` instead of `./.claude/`.
@@ -323,8 +323,8 @@ Add `--global` to any command to target `~/.claude/` instead of `./.claude/`.
 ## Uninstall
 
 ```bash
-npx cc-context-awareness uninstall           # local
-npx cc-context-awareness uninstall --global  # global
+npx cc-context-awareness@latest uninstall           # local
+npx cc-context-awareness@latest uninstall --global  # global
 ```
 
 This removes all installed files (including the skill and active template), cleans up settings entries, and deletes flag files. Other hooks and settings are left intact.

@@ -32,8 +32,8 @@ Memory logs are named `.claude/memory/session-YYYY-MM-DD-NNN.md` where `NNN` is 
 ## Install
 
 ```bash
-npx cc-context-awareness install simple-session-memory
-npx cc-context-awareness install simple-session-memory --global  # global
+npx cc-context-awareness@latest install simple-session-memory
+npx cc-context-awareness@latest install simple-session-memory --global  # global
 ```
 
 The base system is installed automatically if not already present.
@@ -156,8 +156,8 @@ After archival there is always exactly one individual session log remaining — 
 ## Uninstall
 
 ```bash
-npx cc-context-awareness remove simple-session-memory
-npx cc-context-awareness remove simple-session-memory --global  # global
+npx cc-context-awareness@latest remove simple-session-memory
+npx cc-context-awareness@latest remove simple-session-memory --global  # global
 ```
 
 This removes hooks, cleans up settings, and removes the `memory-50`/`memory-65`/`memory-80` thresholds from cc-context-awareness config. Memory logs at `.claude/memory/` are preserved.

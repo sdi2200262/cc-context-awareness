@@ -22,7 +22,7 @@ export async function statusCommand(options = {}) {
 
   if (!await fs.pathExists(paths.metaFile)) {
     logger.warn(`cc-context-awareness is not installed (${scope}).`);
-    logger.dim('Run: npx cc-context-awareness', { indent: true });
+    logger.dim('Run: npx cc-context-awareness@latest', { indent: true });
     return;
   }
 

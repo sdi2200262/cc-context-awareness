@@ -107,8 +107,8 @@ Adds an automated session memory system. Claude writes incremental memory logs a
 
 **Install:**
 ```bash
-npx cc-context-awareness install simple-session-memory        # local
-npx cc-context-awareness install simple-session-memory --global  # global
+npx cc-context-awareness@latest install simple-session-memory        # local
+npx cc-context-awareness@latest install simple-session-memory --global  # global
 ```
 
 See `templates/simple-session-memory/README.md` for full details, memory log format, and archival behavior.
@@ -119,8 +119,8 @@ Automatic Handoff triggers for APM agents at 70% context.
 
 **Install:**
 ```bash
-npx cc-context-awareness install apm-handoff        # local
-npx cc-context-awareness install apm-handoff --global  # global
+npx cc-context-awareness@latest install apm-handoff        # local
+npx cc-context-awareness@latest install apm-handoff --global  # global
 ```
 
 ## Common ANSI Color Codes

@@ -147,8 +147,8 @@ The simple-session-memory template adds:
 
 **Install:**
 ```bash
-npx cc-context-awareness install simple-session-memory        # local
-npx cc-context-awareness install simple-session-memory --global  # global
+npx cc-context-awareness@latest install simple-session-memory        # local
+npx cc-context-awareness@latest install simple-session-memory --global  # global
 ```
 
 **What it adds to config.json:**

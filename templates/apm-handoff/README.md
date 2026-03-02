@@ -40,8 +40,8 @@ The template does not perform the Handoff itself - APM's own Handoff commands ([
 ## Install
 
 ```bash
-npx cc-context-awareness install apm-handoff
-npx cc-context-awareness install apm-handoff --global  # global
+npx cc-context-awareness@latest install apm-handoff
+npx cc-context-awareness@latest install apm-handoff --global  # global
 ```
 
 The base system is installed automatically if not already present. Restart Claude Code after installing.
@@ -94,8 +94,8 @@ Find the entry with `"level": "apm-handoff"` and change the `"percent"` value.
 ## Uninstall
 
 ```bash
-npx cc-context-awareness remove apm-handoff
-npx cc-context-awareness remove apm-handoff --global  # global
+npx cc-context-awareness@latest remove apm-handoff
+npx cc-context-awareness@latest remove apm-handoff --global  # global
 ```
 
 If you appended Handoff instructions to `CLAUDE.md`, remove them manually.
