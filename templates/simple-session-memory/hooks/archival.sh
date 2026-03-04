@@ -50,6 +50,6 @@ jq -n \
   '{
     "hookSpecificOutput": {
       "hookEventName": "SessionStart",
-      "additionalContext": ("SESSION MEMORY ARCHIVAL NEEDED\n\n" + $n + " session logs have accumulated. Before proceeding with any other work, delegate to the memory-archiver agent to archive them.\n\nFiles to archive:\n" + $files + "\nArchive target: " + $target + "\n\nThe newest session log is NOT in this list and must NOT be deleted.")
+      "additionalContext": ("SESSION MEMORY ARCHIVAL NEEDED\n\n" + $n + " session logs have accumulated. Before proceeding with any other work, delegate to the memory-archiver agent to archive them.\n\nFiles to archive:\n" + $files + "\nArchive target: " + $target + "\n\nThe newest session log is NOT in this list and must NOT be deleted.\n\nIMPORTANT — After the memory-archiver agent returns:\n1. Read the deletion manifest in its final message (the ```deletion-manifest``` fenced block).\n2. Delete each file listed under delete_files using: rm .claude/memory/<filename>\n3. Delete each directory listed under delete_directories using: rm -r .claude/memory/attachments/<dir>/\n4. Use relative paths. Delete one item per command.\nThe archiver does NOT delete anything itself — you must handle all deletions here.")
     }
   }'

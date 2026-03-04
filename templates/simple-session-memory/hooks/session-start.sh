@@ -28,7 +28,7 @@ if [[ -n "$LATEST_LOG" ]]; then
     --arg name "$LOG_NAME" '{
       "hookSpecificOutput": {
         "hookEventName": "SessionStart",
-        "additionalContext": ("SESSION MEMORY RESTORED AFTER COMPACTION\n\nThe previous session was auto-compacted. The following memory log has been loaded — read it and continue from where work left off.\n\nMemory log: " + $name + "\n\n" + $content + "\n\n---\nIMPORTANT: The session_id in the frontmatter belongs to the previous session. Your current session has a new session_id. If you need to write memory updates, create a new log using the counter in .claude/memory/.session-count.")
+        "additionalContext": ("SESSION MEMORY RESTORED AFTER COMPACTION\n\nThe following memory log has been loaded. Read it and continue from where work left off.\n\nMemory log: " + $name + "\n\n" + $content + "\n\n---\nCOMPACTION RULES:\n1. Compaction resets the context window. Always create a new session log using the counter in .claude/memory/ — even if this log has the same session_id as your current session.\n2. Add  continues: " + $name + "  to the new log'\''s YAML frontmatter to link it to this pre-compaction log.\n3. Update .claude/memory/index.md with the new log entry.")
       }
     }'
   exit 0
@@ -45,7 +45,7 @@ if [[ -n "$LATEST_ARCHIVE" ]]; then
     --arg name "$ARCHIVE_NAME" '{
       "hookSpecificOutput": {
         "hookEventName": "SessionStart",
-        "additionalContext": ("SESSION MEMORY RESTORED AFTER COMPACTION\n\nNo recent session log was found. Loading the most recent session archive (covers multiple prior sessions).\n\nArchive: " + $name + "\n\n" + $content + "\n\n---\nIMPORTANT: This archive covers multiple prior sessions. Your current session has a new session_id. Create a new session log using the counter in .claude/memory/.session-count.")
+        "additionalContext": ("SESSION MEMORY RESTORED AFTER COMPACTION\n\nNo recent session log was found. Loading the most recent archive (covers multiple prior sessions).\n\nArchive: " + $name + "\n\n" + $content + "\n\n---\nCOMPACTION RULES:\n1. Create a new session log using the counter in .claude/memory/.\n2. Update .claude/memory/index.md with the new log entry.")
       }
     }'
   exit 0
