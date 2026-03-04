@@ -117,6 +117,18 @@ export async function removeTemplateAssets(templateId, paths) {
     }
   }
 
+  // 4b. Remove skills
+  if (manifest.skills && manifest.skills.length > 0) {
+    for (const skill of manifest.skills) {
+      const skillPath = path.join(paths.claudeDir, skill.dest);
+      const skillDir = path.dirname(skillPath);
+      if (await fs.pathExists(skillDir)) {
+        await fs.remove(skillDir);
+        logger.info(`Removed skill ${path.basename(skillDir)}`);
+      }
+    }
+  }
+
   // 5. Write updated settings
   await writeSettings(paths.settingsFile, settings);
 

@@ -165,6 +165,8 @@ async function installTemplate(templateId, paths, scope, options) {
     logger.blank();
   }
 
+  const isUpgrade = meta.activeTemplate === templateId && !!meta.activeTemplateVersion;
+
   logger.clearAndBanner();
   logger.info(`Installing template: ${entry.name} (${scope})...`);
   logger.info('Fetching from GitHub Releases...');
@@ -215,6 +217,18 @@ async function installTemplate(templateId, paths, scope, options) {
       }
     }
 
+    // 3b. Install skills
+    if (manifest.skills && manifest.skills.length > 0) {
+      logger.info('Installing skills...');
+      for (const skill of manifest.skills) {
+        const srcSkill = path.join(templateDir, skill.source);
+        const destSkill = path.join(paths.claudeDir, skill.dest);
+        await fs.ensureDir(path.dirname(destSkill));
+        await fs.copy(srcSkill, destSkill);
+        logger.success(`Installed ${path.basename(skill.dest)}`);
+      }
+    }
+
     // 4. Create directories
     if (manifest.directories && manifest.directories.length > 0) {
       logger.info('Creating directories...');
@@ -237,10 +251,16 @@ async function installTemplate(templateId, paths, scope, options) {
     // 6. Write settings
     await writeSettings(paths.settingsFile, settings);
 
-    // 7. Save template.json locally (for remove without network)
+    // 7. Save template.json and snippet locally (for remove without network + migration reference)
     const templateInstallDir = path.join(paths.claudeDir, templateId);
     await fs.ensureDir(templateInstallDir);
     await fs.writeJson(path.join(templateInstallDir, 'template.json'), manifest, { spaces: 2 });
+    if (manifest.claude_snippet) {
+      const snippetSrc = path.join(templateDir, manifest.claude_snippet);
+      if (await fs.pathExists(snippetSrc)) {
+        await fs.copy(snippetSrc, path.join(templateInstallDir, manifest.claude_snippet));
+      }
+    }
 
     // 8. Patch CLAUDE.md
     if (!options.noClaudeMd && manifest.claude_snippet) {
@@ -274,6 +294,16 @@ async function installTemplate(templateId, paths, scope, options) {
     logger.blank();
     logger.success(`${entry.name} v${version} installed!`);
     logger.dim('Restart Claude Code to activate.', { indent: true });
+
+    // Show upgrade hint if reinstalling and template has migration skills
+    if (isUpgrade && manifest.skills) {
+      const migrateSkills = manifest.skills.filter(s => s.dest.includes('migrate'));
+      for (const skill of migrateSkills) {
+        const skillName = path.basename(path.dirname(skill.dest));
+        logger.blank();
+        logger.info(`Tip: Run /${skillName} to upgrade existing data to the latest format.`);
+      }
+    }
   } finally {
     // Clean up temp directory
     cleanup(tempDir);

@@ -9,6 +9,9 @@
   "agents": [
     { "source": "agents/memory-archiver.md", "dest": "agents/memory-archiver.md" }
   ],
+  "skills": [
+    { "source": "skills/migrate/SKILL.md", "dest": "skills/migrate-simple-session-memory/SKILL.md" }
+  ],
   "directories": ["memory", "memory/archive"],
   "claude_snippet": "CLAUDE.snippet.md",
   "claude_snippet_marker": "Session Memory System"
