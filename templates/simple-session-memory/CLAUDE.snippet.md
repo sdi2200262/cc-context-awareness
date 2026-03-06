@@ -144,6 +144,8 @@ When supplementary content (analysis findings, research output, detailed tables)
 
 When 5+ session logs accumulate, a hook injects archival instructions after the next compaction. When you see these instructions, delegate to the `memory-archiver` agent (defined in `.claude/agents/memory-archiver.md`) to synthesize the older logs into `.claude/memory/archive/`, then handle the file cleanup it requests. The newest session log is always preserved — never archived — so the most recent context is never lost.
 
+The archiver uses Sonnet by default. To use Haiku instead (faster, cheaper), edit `.claude/agents/memory-archiver.md` and change `model: sonnet` to `model: haiku`.
+
 ## Integration with Claude Code Auto-Memory
 
 Claude Code's native auto-memory (`MEMORY.md` in `~/.claude/projects/<project>/memory/`) and this session memory system serve **different purposes and different namespaces** — they do not conflict:

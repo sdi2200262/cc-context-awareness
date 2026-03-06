@@ -7,8 +7,14 @@ tools:
   - Edit
   - Glob
   - Grep
-model: haiku
+model: sonnet
 permissionMode: acceptEdits
+hooks:
+  PreToolUse:
+    - matcher: "Write|Edit"
+      hooks:
+        - type: command
+          command: ".claude/simple-session-memory/hooks/approve-memory-write.sh"
 ---
 
 # Memory Archiver Agent

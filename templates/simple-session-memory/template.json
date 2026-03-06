@@ -4,13 +4,20 @@
   "thresholds_level_prefix": "memory-",
   "hooks": [
     { "event": "SessionStart", "matcher": "compact", "script": "hooks/session-start.sh" },
-    { "event": "SessionStart", "matcher": "compact", "script": "hooks/archival.sh" }
+    { "event": "SessionStart", "matcher": "compact", "script": "hooks/archival.sh" },
+    { "event": "PreToolUse", "matcher": "Write|Edit", "script": "hooks/approve-memory-write.sh" }
   ],
   "agents": [
     { "source": "agents/memory-archiver.md", "dest": "agents/memory-archiver.md" }
   ],
   "skills": [
     { "source": "skills/migrate/SKILL.md", "dest": "skills/migrate-simple-session-memory/SKILL.md" }
+  ],
+  "permissions": [
+    "Write(.claude/memory/**)",
+    "Edit(.claude/memory/**)",
+    "Bash(rm .claude/memory/session-*)",
+    "Bash(rm -r .claude/memory/attachments/*)"
   ],
   "directories": ["memory", "memory/archive"],
   "claude_snippet": "CLAUDE.snippet.md",

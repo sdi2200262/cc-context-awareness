@@ -49,7 +49,25 @@ Check and fix:
 
 If the index already has all three sections with the correct column names, skip it.
 
-### 3. Report
+### 3. Audit settings.local.json
+
+Read `.claude/settings.local.json`. Check for these entries and add any that are missing:
+
+**Permissions** — ensure `permissions.allow` contains:
+- `Write(.claude/memory/**)`
+- `Edit(.claude/memory/**)`
+- `Bash(rm .claude/memory/session-*)`
+- `Bash(rm -r .claude/memory/attachments/*)`
+
+**PreToolUse hook** — ensure a `PreToolUse` hook entry exists with matcher `Write|Edit` pointing to the approve-memory-write script at `.claude/simple-session-memory/hooks/approve-memory-write.sh`. Use the absolute path (based on project root).
+
+Only add missing entries. Do not remove or reorder existing permissions or hooks.
+
+### 4. Audit approve-memory-write hook
+
+Check that `.claude/simple-session-memory/hooks/approve-memory-write.sh` exists and is executable. If it's missing, read the reference from `.claude/agents/memory-archiver.md` frontmatter to confirm the expected path, then warn the user to reinstall the template (`npx cc-context-awareness@latest install simple-session-memory`).
+
+### 5. Report
 
 After completing all audits, report to the user:
 
