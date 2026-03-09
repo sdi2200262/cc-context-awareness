@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # simple-session-memory — Archival check hook (SessionStart, matcher: "compact")
-# Counts session logs in pure bash. If >= 5 accumulate, injects an instruction
-# into the session context telling Claude to delegate to the memory-archiver agent.
-# The custom agent does the actual condensation — no bash string concatenation.
+# Counts session directories in .claude/memory/. If >= 5 accumulate, injects an
+# instruction into the session context telling Claude to delegate to the
+# memory-archiver agent. The custom agent does the actual condensation.
 #
 # Hook event: SessionStart (matcher: "compact")
 # Runs AFTER session-start.sh so session context is loaded first.
@@ -13,30 +13,35 @@ MEMORY_DIR=".claude/memory"
 
 [[ ! -d "$MEMORY_DIR" ]] && exit 0
 
-# Collect session logs sorted newest-first (Bash 3.2+ compatible).
-# The glob is non-recursive — only matches files directly in .claude/memory/,
-# never in .claude/memory/archive/. The regex further ensures only
-# session-YYYY-MM-DD-NNN.md filenames are counted, excluding archive-*.md.
-LOGS=()
+# Collect session directories sorted newest-first (lexicographic reverse).
+# The glob is non-recursive — only matches directories directly in .claude/memory/.
+DIRS=()
 while IFS= read -r line; do
-  [[ -n "$line" ]] && LOGS+=("$line")
-done < <(ls -t "$MEMORY_DIR"/session-*.md 2>/dev/null \
-  | grep -E "session-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]+\.md$" \
-  || true)
+  [[ -n "$line" ]] && DIRS+=("$line")
+done < <(ls -d "$MEMORY_DIR"/session-*/ 2>/dev/null | sort -r || true)
 
-COUNT="${#LOGS[@]}"
+COUNT="${#DIRS[@]}"
 
 # Nothing to do
 [[ "$COUNT" -lt 5 ]] && exit 0
 
-# Newest log is preserved; everything else needs archiving
-TO_ARCHIVE=("${LOGS[@]:1}")
+# Newest session is preserved; everything else needs archiving
+TO_ARCHIVE=("${DIRS[@]:1}")
 ARCHIVE_COUNT="${#TO_ARCHIVE[@]}"
 
-# Build file list for the instruction
+# Build file list (log paths inside directories) for the archiver to read
 FILES_LIST=""
-for f in "${TO_ARCHIVE[@]}"; do
-  FILES_LIST="${FILES_LIST}  - .claude/memory/$(basename "$f")
+for d in "${TO_ARCHIVE[@]}"; do
+  NAME="$(basename "$d")"
+  FILES_LIST="${FILES_LIST}  - .claude/memory/${NAME}/${NAME}.md
+"
+done
+
+# Build directory list for the deletion manifest
+DIRS_LIST=""
+for d in "${TO_ARCHIVE[@]}"; do
+  NAME="$(basename "$d")"
+  DIRS_LIST="${DIRS_LIST}  - .claude/memory/${NAME}/
 "
 done
 
@@ -45,11 +50,12 @@ ARCHIVE_TARGET=".claude/memory/archive/archive-${TODAY}.md"
 
 jq -n \
   --arg files "$FILES_LIST" \
+  --arg dirs "$DIRS_LIST" \
   --arg n "$ARCHIVE_COUNT" \
   --arg target "$ARCHIVE_TARGET" \
   '{
     "hookSpecificOutput": {
       "hookEventName": "SessionStart",
-      "additionalContext": ("SESSION MEMORY ARCHIVAL NEEDED\n\n" + $n + " session logs have accumulated. Before proceeding with any other work, delegate to the memory-archiver agent to archive them.\n\nFiles to archive:\n" + $files + "\nArchive target: " + $target + "\n\nThe newest session log is NOT in this list and must NOT be deleted.\n\nIMPORTANT — After the memory-archiver agent returns:\n1. Read the deletion manifest in its final message (the ```deletion-manifest``` fenced block).\n2. Delete each file listed under delete_files using: rm .claude/memory/<filename>\n3. Delete each directory listed under delete_directories using: rm -r .claude/memory/attachments/<dir>/\n4. Use relative paths. Delete one item per command.\nThe archiver does NOT delete anything itself — you must handle all deletions here.")
+      "additionalContext": ("SESSION MEMORY ARCHIVAL NEEDED\n\n" + $n + " session directories have accumulated. Before proceeding with any other work, delegate to the memory-archiver agent to archive them.\n\nSession logs to archive (read these):\n" + $files + "\nAlso check each session directory for supplementary files and read those too.\n\nArchive target: " + $target + "\n\nThe newest session directory is NOT in this list and must NOT be deleted.\n\nIMPORTANT — After the memory-archiver agent returns:\n1. Read the deletion manifest in its final message (the ```deletion-manifest``` fenced block).\n2. Delete each directory listed under delete_directories using: rm -r .claude/memory/<session-name>/\n3. Use relative paths. Delete one directory per command.\nThe archiver does NOT delete anything itself — you must handle all deletions here.")
     }
   }'

@@ -125,7 +125,7 @@ Ready-to-use configurations that install hooks and config on top of the base sys
 
 ### simple-session-memory
 
-Automated session memory for single-agent sessions. Claude writes incremental memory logs at 50%, 65%, and 80% context usage, reads them back after compaction, and archives old logs via a dedicated custom agent. Includes a three-tier index (Active Sessions / Appendices / Archives), per-day session counters, attachment support, and a `/migrate-simple-session-memory` skill for upgrading existing installations.
+Automated session memory for single-agent sessions. Claude writes incremental memory logs at 50%, 65%, and 80% context usage, reads them back after compaction, and archives old logs via a dedicated custom agent. Each session gets its own directory (log + supplementary files). Includes a three-tier index (Active Sessions / Appendices / Archives), formal content placement (index for history, MEMORY.md for current state), and a `/migrate-simple-session-memory` skill for upgrading existing installations.
 
 ```
 50% context  →  writes initial session log

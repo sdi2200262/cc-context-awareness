@@ -15,14 +15,38 @@ Auto-compact →  After resuming, memory log is loaded as context
 Every 5 logs →  The memory-archiver agent synthesizes them into an archive
 ```
 
-Memory logs are named `.claude/memory/session-YYYY-MM-DD-NNN.md` where `NNN` is derived by counting existing logs in `.claude/memory/` at write time. The session ID is stored in the YAML frontmatter, not the filename — this makes logs easy to sort and archive without encoding volatile identifiers into paths. Each log captures:
-- Current task and project state
-- Work completed this session
-- Key decisions made
-- Files modified
-- What's in progress
-- Specific next steps for continuation
-- Any other relevant context
+## Session Model
+
+Each session log represents one Claude's context window. Multiple Claudes work one after the other on the same project, each leaving a log for the next. Two scenarios create a new log:
+
+| Scenario | Trigger | `continues:` | Previous context loaded? |
+|----------|---------|-------------|--------------------------|
+| **Continuation** | `/compact` or autocompaction | Yes | Yes — hook injects previous log |
+| **Fresh session** | `/clear`, new CC session | No | No — orient from index |
+
+**Continuation** means the user's workstream carries across a context reset — same work, new context window, with a handoff summary. **Fresh session** means a new workstream begins independently, with no prior context injected.
+
+Logs are never overwritten or reused across context windows.
+
+Detailed logging instructions live in a dedicated skill (`.claude/skills/log-session-memory/SKILL.md`), keeping the CLAUDE.md snippet slim. The 50% threshold tells Claude to read the skill; later thresholds are self-contained with just the append format.
+
+## Directory-per-Session
+
+Each session gets its own directory containing the log and any supplementary files:
+
+```
+.claude/memory/
+  session-2026-03-04-001/
+    session-2026-03-04-001.md     # the session log
+    exploration-findings.md        # supplementary (optional)
+    refactor-plan.md               # supplementary (optional)
+  session-2026-03-04-002/
+    session-2026-03-04-002.md
+  index.md
+  archive/
+```
+
+Session directories are named `session-YYYY-MM-DD-NNN` where `NNN` is a per-day counter (resets daily). The log file inside shares the directory name. Supplementary files (analysis, plans, research) live alongside the log — no separate attachments convention needed. The co-location makes relationships clear and cleanup simple (`rm -r` the whole directory).
 
 ## Requirements
 
@@ -54,11 +78,15 @@ The base system is installed automatically if not already present.
   memory/
     index.md                        # Running index of all sessions
     archive/                        # Synthesized archives of older sessions
+  skills/
+    log-session-memory/SKILL.md     # Detailed logging procedure (read by 50% threshold)
+    migrate-simple-session-memory/  # Migration skill for upgrades
   simple-session-memory/
     hooks/
       session-start.sh              # Loads memory after compaction
-      archival.sh                   # Triggers archival when >= 5 logs accumulate
+      archival.sh                   # Triggers archival when >= 5 sessions accumulate
       approve-memory-write.sh       # PreToolUse hook — approves .claude/memory/ writes
+    CLAUDE.snippet.md               # Reference copy of CLAUDE.md instructions
 CLAUDE.md                           # Instructions appended (optional)
 ```
 
@@ -102,18 +130,11 @@ Specific actions for next session — enough to continue without reading the cod
 User preferences, known issues, environment details.
 ```
 
-Updates are appended with a separator:
-
-```markdown
----
-*Updated at 65% context*
-
-[New information since last checkpoint]
-```
+At 65% and 80% context, the log is updated in place — existing sections are edited to reflect current state and `context_at_log` in the frontmatter is bumped. No appending or duplicating sections.
 
 ## Session Index
 
-`.claude/memory/index.md` is a three-tier information hierarchy maintained by Claude and the memory-archiver agent. It gives fresh sessions quick orientation into what's been worked on.
+`.claude/memory/index.md` is a three-tier information hierarchy maintained by Claude and the memory-archiver agent. It gives fresh sessions quick orientation and serves as the project's historical record and process knowledge store.
 
 ```markdown
 # Session Memory Index
@@ -122,7 +143,7 @@ Updates are appended with a separator:
 
 | Session | Date | Summary |
 |---------|------|---------|
-| session-2026-02-19-007.md | 2026-02-19 | Completed auth middleware refactor |
+| session-2026-02-19-007 | 2026-02-19 | Completed auth middleware refactor |
 
 ## Archives
 
@@ -140,18 +161,28 @@ Built out authentication middleware and API rate limiting. Key decisions: ...
 
 **Active Sessions** is maintained by Claude during normal sessions. **Archives** and **Appendices** are managed by the memory-archiver agent during archival. Appendices provide a mid-signal tier — more detail than the table, less than the full archive files. Prior-month appendices are automatically compressed into single-paragraph summaries.
 
+## Content Placement
+
+| Store | Location | Content | Character |
+|-------|----------|---------|-----------|
+| **Session logs** | `.claude/memory/session-*/` | Per-session work, decisions, handoff data | Ephemeral. One Claude's context window. |
+| **Session index** | `.claude/memory/index.md` | Execution history, durable observations, process knowledge | Historical. Accumulates. |
+| **Auto-memory** | `MEMORY.md` (CC native) | Current repo state, working technical notes | Living. Changes with code. No history. |
+
+`MEMORY.md` reflects the present (what is the current state?). `index.md` accumulates the past (what happened and what was learned?). They complement each other without overlap.
+
 ## Archival
 
-When 5 session logs accumulate in `.claude/memory/`, `archival.sh` fires at the start of the next post-compaction session (after `session-start.sh` restores context). It injects instructions telling Claude to delegate to the `memory-archiver` custom agent (`.claude/agents/memory-archiver.md`), which:
+When 5 session directories accumulate in `.claude/memory/`, `archival.sh` fires at the start of the next post-compaction session (after `session-start.sh` restores context). It injects instructions telling Claude to delegate to the `memory-archiver` custom agent (`.claude/agents/memory-archiver.md`), which:
 
-1. Archives all logs **except the most recent** (the newest is always preserved)
+1. Archives all sessions **except the most recent** (the newest is always preserved)
 2. Creates a synthesized archive at `.claude/memory/archive/archive-YYYY-MM-DD.md`
-3. Updates `index.md` — moves entries to Archives, writes Appendix summaries, compresses prior-month appendices
-4. Returns a deletion manifest — the calling agent handles all file removals
+3. Updates `index.md` — moves entries to Archives, writes Appendix summaries with durable observations, compresses prior-month appendices
+4. Returns a deletion manifest — the calling agent handles all directory removals
 
 The custom agent uses the `sonnet` model by default (configurable to `haiku` in the agent file) and has `acceptEdits` permission mode. A `PreToolUse` hook (`approve-memory-write.sh`) in the agent's frontmatter outputs `permissionDecision: "allow"` for `.claude/memory/` paths, bypassing the permission system entirely. This is critical for background subagents, which auto-deny any tool not pre-approved upfront.
 
-After archival there is always exactly one individual session log remaining — the previous session — so there is never a context gap between sessions. Archives preserve key decisions, outcomes, and context useful for future sessions.
+After archival there is always exactly one session directory remaining — the previous session — so there is never a context gap between sessions. Archives preserve key decisions, outcomes, and context useful for future sessions.
 
 ## Migration
 
@@ -161,7 +192,7 @@ After upgrading, run the migration skill to bring existing installations up to d
 /migrate-simple-session-memory
 ```
 
-The skill audits CLAUDE.md, index.md, settings.local.json, and the approve-memory-write hook — fixing any differences from the current release format. It's idempotent: if everything is current, it reports "no migration needed."
+The skill audits CLAUDE.md, index.md, settings.local.json, and the session directory structure — fixing any differences from the current release format. It handles converting flat session logs to directory-per-session layout and migrating attachments. It's idempotent: if everything is current, it reports "no migration needed."
 
 ## Design Notes
 
@@ -171,9 +202,11 @@ The skill audits CLAUDE.md, index.md, settings.local.json, and the approve-memor
 
 **Why a PreToolUse hook for permissions?** Background subagents auto-deny any tool not pre-approved upfront — neither `permissionMode: acceptEdits` nor `permissions.allow` rules reliably propagate. The `approve-memory-write.sh` hook uses `permissionDecision: "allow"` in the PreToolUse output to bypass the permission system entirely for `.claude/memory/` paths. This is defined in the agent's frontmatter (scoped to the agent's lifetime) and also registered in settings (as a project-level fallback). For non-memory paths, the hook exits 0 with no output, falling through to the normal permission check.
 
+**Why directory-per-session?** Co-locating session logs with their supplementary files simplifies organization, cleanup, and archival. No separate `attachments/` convention needed — everything for a session lives in one place. Deleting a session is `rm -r` on one directory.
+
 **Compaction safety:** After compaction, cc-context-awareness uses a compaction marker to prevent stale threshold evaluations. This protects all thresholds including `memory-50/65/80`.
 
-**Native auto-memory compatibility:** Session logs (`.claude/memory/`) and Claude Code's auto-memory (`~/.claude/projects/.../memory/MEMORY.md`) occupy different namespaces and complement each other — session logs for per-session work history, auto-memory for stable cross-session knowledge.
+**Native auto-memory compatibility:** Session logs (`.claude/memory/session-*/`) and Claude Code's auto-memory (`~/.claude/projects/.../memory/MEMORY.md`) occupy different namespaces and serve different purposes — session logs for ephemeral per-session work history, auto-memory for current codebase state. The session index (`.claude/memory/index.md`) is the historical record; auto-memory is the living document.
 
 ## Uninstall
 

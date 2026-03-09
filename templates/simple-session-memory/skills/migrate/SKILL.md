@@ -1,11 +1,33 @@
 ---
 name: migrate-simple-session-memory
-description: Migrate an existing simple-session-memory installation to match the current release format. Run this after upgrading the template to bring CLAUDE.md instructions and index.md up to date.
+description: Migrate an existing simple-session-memory installation to match the current release format. Run this after upgrading the template to bring CLAUDE.md instructions, directory structure, and index.md up to date.
 ---
 
 # Simple Session Memory Migration
 
 You are migrating the user's simple-session-memory installation to the current release format. This is a **target-state migration** — check what the user has, compare it to what the current release expects, and fix any differences. If everything is already current, report that and stop.
+
+## Target State Summary
+
+The current release uses **directory-per-session** layout and a formal **content placement** model:
+
+```
+.claude/memory/
+  session-YYYY-MM-DD-NNN/
+    session-YYYY-MM-DD-NNN.md     # the session log
+    <supplementary files>         # formerly "attachments"
+  index.md
+  archive/
+```
+
+Key changes from previous versions:
+- Session logs live inside their own directory (not as flat files in `.claude/memory/`)
+- Supplementary files (formerly "attachments") live alongside the log in the session directory (not in a separate `.claude/memory/attachments/` tree)
+- Index references use session stems without `.md` (e.g. `session-2026-03-04-002`, not `session-2026-03-04-002.md`)
+- The `continues:` field in YAML frontmatter also uses stems without `.md`
+- The `attachments:` YAML field is no longer used (co-location replaces it)
+- The `.session-count` global counter file is no longer used (per-day directory scanning replaces it)
+- Bash permissions changed: `Bash(rm -r .claude/memory/session-*)` replaces the old `Bash(rm .claude/memory/session-*)` and `Bash(rm -r .claude/memory/attachments/*)`
 
 ## Process
 
@@ -21,11 +43,37 @@ The installer saves a reference copy of the current snippet at `.claude/simple-s
 4. Compare the section content to the reference. If they differ (even partially), replace the entire section with the reference content. Preserve everything outside the section (before and after the `---` delimiters).
 5. If no Session Memory System section exists in CLAUDE.md, append it with a `---` separator (same as a fresh install).
 
-### 2. Audit index.md
+### 2. Migrate directory structure
 
-Read `.claude/memory/index.md`. If the file doesn't exist, skip this step (it gets created during normal usage).
+This is the critical step. Convert flat session logs to directory-per-session layout.
 
-The expected structure has three sections:
+**Check first:** If `.claude/memory/` already contains `session-*/` directories (not flat files), the structure may already be migrated. Verify by checking whether session logs exist as flat files (`session-*.md` directly in `.claude/memory/`) or inside directories.
+
+**If flat session log files exist in `.claude/memory/`:**
+
+For each `session-*.md` file directly in `.claude/memory/` (not inside a subdirectory, not in `archive/`):
+
+1. Extract the stem (filename without `.md`, e.g. `session-2026-03-09-004`)
+2. Create the directory: `mkdir -p .claude/memory/<stem>/`
+3. Move the log: `mv .claude/memory/<stem>.md .claude/memory/<stem>/<stem>.md`
+4. If `.claude/memory/attachments/<stem>/` exists, move its contents into the session directory:
+   - `mv .claude/memory/attachments/<stem>/* .claude/memory/<stem>/`
+   - `rmdir .claude/memory/attachments/<stem>/`
+
+After processing all session logs:
+- If `.claude/memory/attachments/` exists and is empty, remove it: `rmdir .claude/memory/attachments/`
+- If `.claude/memory/.session-count` exists, remove it: `rm .claude/memory/.session-count`
+
+**Do NOT touch:**
+- `.claude/memory/archive/` — archives stay as-is
+- `.claude/memory/index.md` — handled in step 3
+- Any files inside `archive/`
+
+### 3. Audit index.md
+
+Read `.claude/memory/index.md`. If the file doesn't exist, skip this step.
+
+The expected structure has three sections with specific column names:
 
 ```
 ## Active Sessions
@@ -42,44 +90,53 @@ Summary paragraph...
 
 Check and fix:
 
-1. **Active Sessions** — if there's a bare `| File | Date | Summary |` table without a `## Active Sessions` heading above it, add the heading and rename the `File` column to `Session`.
-2. **Archives** — if the table uses `| Archive | Covers |` columns, reshape to `| Archive | Period | Summary |` — move the `Covers` value to `Period`, leave `Summary` empty.
-3. **Appendices** — if there's no `## Appendices` section, add it at the end (empty — appendices are populated by future archival runs).
-4. **Preserve all data rows** — only restructure, never delete session or archive entries.
+1. **Session references** — if entries in the Active Sessions table use `.md` suffixes (e.g. `session-2026-03-09-004.md`), strip the `.md` to just the stem (`session-2026-03-09-004`).
+2. **Active Sessions** — if there's a bare `| File | Date | Summary |` table without a `## Active Sessions` heading above it, add the heading and rename the `File` column to `Session`.
+3. **Archives** — if the table uses `| Archive | Covers |` columns, reshape to `| Archive | Period | Summary |` — move the `Covers` value to `Period`, leave `Summary` empty.
+4. **Appendices** — if there's no `## Appendices` section, add it at the end (empty — appendices are populated by future archival runs).
+5. **Preserve all data rows** — only restructure, never delete session or archive entries.
 
-If the index already has all three sections with the correct column names, skip it.
+If the index already has all three sections with the correct column names and stem-based references, skip it.
 
-### 3. Audit settings.local.json
+### 4. Audit settings.local.json
 
-Read `.claude/settings.local.json`. Check for these entries and add any that are missing:
+Read `.claude/settings.local.json`. Check for these entries and fix as needed:
 
 **Permissions** — ensure `permissions.allow` contains:
 - `Write(.claude/memory/**)`
 - `Edit(.claude/memory/**)`
-- `Bash(rm .claude/memory/session-*)`
-- `Bash(rm -r .claude/memory/attachments/*)`
+- `Bash(rm -r .claude/memory/session-*)`
 
-**PreToolUse hook** — ensure a `PreToolUse` hook entry exists with matcher `Write|Edit` pointing to the approve-memory-write script at `.claude/simple-session-memory/hooks/approve-memory-write.sh`. Use the absolute path (based on project root).
+**Remove old permissions** if present:
+- `Bash(rm .claude/memory/session-*)` (old flat-file permission — without `-r`)
+- `Bash(rm -r .claude/memory/attachments/*)` (no longer needed)
 
-Only add missing entries. Do not remove or reorder existing permissions or hooks.
+**PreToolUse hook** — ensure a `PreToolUse` hook entry exists with matcher `Write|Edit` pointing to the approve-memory-write script at `.claude/simple-session-memory/hooks/approve-memory-write.sh`.
 
-### 4. Audit approve-memory-write hook
+### 5. Audit approve-memory-write hook
 
-Check that `.claude/simple-session-memory/hooks/approve-memory-write.sh` exists and is executable. If it's missing, read the reference from `.claude/agents/memory-archiver.md` frontmatter to confirm the expected path, then warn the user to reinstall the template (`npx cc-context-awareness@latest install simple-session-memory`).
+Check that `.claude/simple-session-memory/hooks/approve-memory-write.sh` exists and is executable. If it's missing, warn the user to reinstall the template (`npx cc-context-awareness@latest install simple-session-memory`).
 
-### 5. Report
+### 6. Audit logging skill
+
+Check that `.claude/skills/log-session-memory/SKILL.md` exists. This skill contains the detailed session logging procedure referenced by threshold messages. If it's missing, warn the user to reinstall the template.
+
+### 7. Report
 
 After completing all audits, report to the user:
 
 - Which files were updated and what changed (brief summary per file)
+- How many session logs were migrated to directory-per-session
+- How many attachment directories were merged into session directories
 - Which files were already current (skipped)
 - If everything was current: "Installation is up to date — no migration needed."
 
 ## Important
 
-- **Be idempotent**: if a file already matches the target state, skip it.
-- **Preserve user data**: never delete session logs, archive files, or index rows. Only restructure formatting.
+- **Be idempotent**: if a file already matches the target state, skip it. If session directories already exist, don't re-migrate.
+- **Preserve user data**: never delete session logs, archive files, or index rows. Only restructure and move.
 - **Read before writing**: always read the full file before making edits.
 - **Use Edit, not Write**: for existing files, use targeted edits to preserve surrounding content.
-- **Session logs do not need migration** — the log format is backwards-compatible. Optional frontmatter fields (`continues:`, `attachments:`) are only added when applicable.
+- **Use Bash for file operations**: `mkdir`, `mv`, `rm`, `rmdir` for the directory structure migration.
+- **Session log content is backwards-compatible**: do NOT modify YAML frontmatter inside session logs. Old `continues: session-*.md` and `attachments:` fields are historical and harmless — leave them as-is.
 - **The archiver agent does not need migration** — the installer already replaces it with the current version on reinstall.

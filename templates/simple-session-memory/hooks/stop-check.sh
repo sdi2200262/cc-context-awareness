@@ -2,11 +2,11 @@
 # simple-session-memory — Stop hook
 # Ensures a session memory log is written before Claude stops.
 # If no log exists for the current session (identified by session_id in frontmatter),
-# blocks Claude from stopping and asks it to write one with a counter-based filename.
+# blocks Claude from stopping and asks it to write one.
 # Uses stop_hook_active to prevent infinite loops.
 #
-# Filename convention: .claude/memory/session-YYYY-MM-DD-NNN.md
-#   - NNN is a global counter stored in .claude/memory/.session-count
+# Directory convention: .claude/memory/session-YYYY-MM-DD-NNN/session-YYYY-MM-DD-NNN.md
+#   - NNN is a per-day counter derived from existing directories
 #   - session_id is in YAML frontmatter, not the filename
 #
 # Hook event: Stop
@@ -22,30 +22,37 @@ STOP_HOOK_ACTIVE="$(echo "$INPUT" | jq -r '.stop_hook_active // false')"
 MEMORY_DIR=".claude/memory"
 mkdir -p "$MEMORY_DIR"
 
-COUNTER_FILE="$MEMORY_DIR/.session-count"
-
 # ── Helper: find log for this session via frontmatter grep ───────────────────
 find_session_log() {
-  grep -rl "session_id: ${SESSION_ID}" "$MEMORY_DIR" 2>/dev/null \
-    | grep -E "session-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]+\.md$" \
+  local dirs
+  dirs="$(ls -d "$MEMORY_DIR"/session-*/ 2>/dev/null || true)"
+  [[ -z "$dirs" ]] && return
+  grep -rl "session_id: ${SESSION_ID}" $dirs 2>/dev/null \
     | head -1 || true
 }
 
 # ── Helper: reserve the next counter and return the target path ──────────────
 next_log_path() {
-  local current next padded today
-  current="$(cat "$COUNTER_FILE" 2>/dev/null || echo 0)"
-  next=$(( current + 1 ))
-  padded="$(printf "%03d" "$next")"
+  local today highest dir_name current_nnn next padded stem
   today="$(date +%Y-%m-%d)"
-  echo "$next" > "$COUNTER_FILE"
-  echo "${MEMORY_DIR}/session-${today}-${padded}.md"
+  highest="$(ls -d "$MEMORY_DIR"/session-${today}-*/ 2>/dev/null | sort | tail -1 || true)"
+  if [[ -n "$highest" ]]; then
+    dir_name="$(basename "$highest")"
+    current_nnn="${dir_name##*-}"
+    next=$(( 10#$current_nnn + 1 ))
+  else
+    next=1
+  fi
+  padded="$(printf "%03d" "$next")"
+  stem="session-${today}-${padded}"
+  mkdir -p "${MEMORY_DIR}/${stem}"
+  echo "${MEMORY_DIR}/${stem}/${stem}.md"
 }
 
-# ── Helper: flag for archival if 5+ session logs exist ──────────────────────
+# ── Helper: flag for archival if 5+ session directories exist ────────────────
 check_archival() {
   local count
-  count="$(ls -1 "$MEMORY_DIR"/session-*.md 2>/dev/null | wc -l)"
+  count="$( (ls -d "$MEMORY_DIR"/session-*/ 2>/dev/null || true) | wc -l)"
   count="${count// /}"
   [[ "$count" -ge 5 ]] && touch "$MEMORY_DIR/.archive-needed" || true
 }

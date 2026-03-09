@@ -11,13 +11,13 @@
     { "source": "agents/memory-archiver.md", "dest": "agents/memory-archiver.md" }
   ],
   "skills": [
-    { "source": "skills/migrate/SKILL.md", "dest": "skills/migrate-simple-session-memory/SKILL.md" }
+    { "source": "skills/migrate/SKILL.md", "dest": "skills/migrate-simple-session-memory/SKILL.md" },
+    { "source": "skills/log/SKILL.md", "dest": "skills/log-session-memory/SKILL.md" }
   ],
   "permissions": [
     "Write(.claude/memory/**)",
     "Edit(.claude/memory/**)",
-    "Bash(rm .claude/memory/session-*)",
-    "Bash(rm -r .claude/memory/attachments/*)"
+    "Bash(rm -r .claude/memory/session-*)"
   ],
   "directories": ["memory", "memory/archive"],
   "claude_snippet": "CLAUDE.snippet.md",
