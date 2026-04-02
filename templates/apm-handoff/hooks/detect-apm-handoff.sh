@@ -14,9 +14,9 @@ cat > /dev/null
 BUS_DIR=".apm/bus"
 [[ ! -d "$BUS_DIR" ]] && exit 0
 
-# Scan all apm-handoff.md files for non-empty content
+# Scan all handoff.md files for non-empty content
 PENDING=""
-for handoff_file in "$BUS_DIR"/*/apm-handoff.md; do
+for handoff_file in "$BUS_DIR"/*/handoff.md; do
   [[ ! -f "$handoff_file" ]] && continue
   [[ ! -s "$handoff_file" ]] && continue
 
