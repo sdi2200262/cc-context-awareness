@@ -17,12 +17,17 @@ The current release uses **directory-per-session** layout and a formal **content
     session-YYYY-MM-DD-NNN.md     # the session log
     <supplementary files>         # formerly "attachments"
   index.md
-  archive/
+  archives/
+    archive-NAME/
+      archive-NAME.md             # the archive log
+      <supplementary attachments> # optional — load-bearing reference content
 ```
 
 Key changes from previous versions:
 - Session logs live inside their own directory (not as flat files in `.claude/memory/`)
 - Supplementary files (formerly "attachments") live alongside the log in the session directory (not in a separate `.claude/memory/attachments/` tree)
+- Archives use a directory-per-archive layout (`archives/archive-NAME/archive-NAME.md`) mirroring sessions, replacing the old flat `archive/archive-NAME.md` files. Archive directories may contain supplementary attachments preserved verbatim from the archived sessions.
+- The directory itself was renamed `archive/` → `archives/` (plural).
 - Index references use session stems without `.md` (e.g. `session-2026-03-04-002`, not `session-2026-03-04-002.md`)
 - The `continues:` field in YAML frontmatter also uses stems without `.md`
 - The `attachments:` YAML field is no longer used (co-location replaces it)
@@ -51,7 +56,7 @@ This is the critical step. Convert flat session logs to directory-per-session la
 
 **If flat session log files exist in `.claude/memory/`:**
 
-For each `session-*.md` file directly in `.claude/memory/` (not inside a subdirectory, not in `archive/`):
+For each `session-*.md` file directly in `.claude/memory/` (not inside a subdirectory, not in `archive/` or `archives/`):
 
 1. Extract the stem (filename without `.md`, e.g. `session-2026-03-09-004`)
 2. Create the directory: `mkdir -p .claude/memory/<stem>/`
@@ -64,12 +69,33 @@ After processing all session logs:
 - If `.claude/memory/attachments/` exists and is empty, remove it: `rmdir .claude/memory/attachments/`
 - If `.claude/memory/.session-count` exists, remove it: `rm .claude/memory/.session-count`
 
-**Do NOT touch:**
-- `.claude/memory/archive/` — archives stay as-is
-- `.claude/memory/index.md` — handled in step 3
-- Any files inside `archive/`
+**Do NOT touch (in this step):**
+- `.claude/memory/archive/` or `.claude/memory/archives/` — archive layout is handled in step 3
+- `.claude/memory/index.md` — handled in step 4
 
-### 3. Audit index.md
+### 3. Migrate archive layout
+
+Archives moved from flat files in `archive/` to directory-per-archive in `archives/`. Two orthogonal changes: the parent directory was renamed (`archive` → `archives`), and each flat archive file became its own directory with the log inside.
+
+**Determine current state:**
+
+- If `.claude/memory/archives/` exists and `.claude/memory/archive/` does not, the rename is done — proceed to per-archive layout check.
+- If `.claude/memory/archive/` exists, rename it: `mv .claude/memory/archive .claude/memory/archives`.
+- If neither exists, create the empty directory: `mkdir -p .claude/memory/archives`.
+
+**Per-archive directory layout:**
+
+For each `archive-*.md` file directly in `.claude/memory/archives/` (a flat file, not inside a subdirectory):
+
+1. Extract the stem (filename without `.md`, e.g. `archive-2026-03-09`).
+2. Create the directory: `mkdir -p .claude/memory/archives/<stem>/`.
+3. Move the log: `mv .claude/memory/archives/<stem>.md .claude/memory/archives/<stem>/<stem>.md`.
+
+There are no pre-existing supplementary attachments to migrate (the old layout did not support them); the new directory will hold only the log file until a future archival run adds attachments.
+
+If every archive is already laid out as `archives/<stem>/<stem>.md`, skip this step.
+
+### 4. Audit index.md
 
 Read `.claude/memory/index.md`. If the file doesn't exist, skip this step.
 
@@ -93,12 +119,13 @@ Check and fix:
 1. **Session references** — if entries in the Active Sessions table use `.md` suffixes (e.g. `session-2026-03-09-004.md`), strip the `.md` to just the stem (`session-2026-03-09-004`).
 2. **Active Sessions** — if there's a bare `| File | Date | Summary |` table without a `## Active Sessions` heading above it, add the heading and rename the `File` column to `Session`.
 3. **Archives** — if the table uses `| Archive | Covers |` columns, reshape to `| Archive | Period | Summary |` — move the `Covers` value to `Period`, leave `Summary` empty.
-4. **Appendices** — if there's no `## Appendices` section, add it at the end (empty — appendices are populated by future archival runs).
-5. **Preserve all data rows** — only restructure, never delete session or archive entries.
+4. **Archive links** — if any archive references in the Archives table or Appendices section point to the old flat layout (`archive/archive-NAME.md` or `archives/archive-NAME.md` without the directory wrapper), update them to `archives/archive-NAME/archive-NAME.md` to match the directory-per-archive layout. Stem-only references with no path are also acceptable; only rewrite path-bearing links.
+5. **Appendices** — if there's no `## Appendices` section, add it at the end (empty — appendices are populated by future archival runs).
+6. **Preserve all data rows** — only restructure, never delete session or archive entries.
 
-If the index already has all three sections with the correct column names and stem-based references, skip it.
+If the index already has all three sections with the correct column names, stem-based session references, and directory-per-archive links, skip it.
 
-### 4. Audit settings.local.json
+### 5. Audit settings.local.json
 
 Read `.claude/settings.local.json`. Check for these entries and fix as needed:
 
@@ -113,21 +140,22 @@ Read `.claude/settings.local.json`. Check for these entries and fix as needed:
 
 **PreToolUse hook** — ensure a `PreToolUse` hook entry exists with matcher `Write|Edit` pointing to the approve-memory-write script at `.claude/simple-session-memory/hooks/approve-memory-write.sh`.
 
-### 5. Audit approve-memory-write hook
+### 6. Audit approve-memory-write hook
 
 Check that `.claude/simple-session-memory/hooks/approve-memory-write.sh` exists and is executable. If it's missing, warn the user to reinstall the template (`npx cc-context-awareness@latest install simple-session-memory`).
 
-### 6. Audit logging skill
+### 7. Audit logging skill
 
 Check that `.claude/skills/log-session-memory/SKILL.md` exists. This skill contains the detailed session logging procedure referenced by threshold messages. If it's missing, warn the user to reinstall the template.
 
-### 7. Report
+### 8. Report
 
 After completing all audits, report to the user:
 
 - Which files were updated and what changed (brief summary per file)
 - How many session logs were migrated to directory-per-session
 - How many attachment directories were merged into session directories
+- Whether the archive directory was renamed (`archive/` → `archives/`) and how many flat archive files were wrapped into per-archive directories
 - Which files were already current (skipped)
 - If everything was current: "Installation is up to date — no migration needed."
 

@@ -17,7 +17,7 @@ Each session gets its own directory:
     session-YYYY-MM-DD-NNN.md     # the session log
     <supplementary files>         # optional — analysis, plans, research
   index.md
-  archive/
+  archives/
 ```
 
 `NNN` is a per-day counter that resets each calendar day.

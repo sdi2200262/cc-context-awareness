@@ -15,7 +15,7 @@ ERRORS=""
 setup_tmpdir() {
   TMPDIR="$(mktemp -d)"
   cd "$TMPDIR"
-  mkdir -p .claude/memory/archive
+  mkdir -p .claude/memory/archives
 }
 
 teardown_tmpdir() {
@@ -122,7 +122,7 @@ teardown_tmpdir
 
 # Test: allows nested .claude/memory/ paths
 setup_tmpdir
-OUTPUT=$(echo '{"tool_input":{"file_path":".claude/memory/archive/archive-2026-03-09.md"}}' \
+OUTPUT=$(echo '{"tool_input":{"file_path":".claude/memory/archives/archive-2026-03-09/archive-2026-03-09.md"}}' \
   | bash "$SCRIPT_DIR/approve-memory-write.sh" 2>&1) || true
 assert_json_valid "approve: valid JSON for archive path" "$OUTPUT"
 assert_contains "approve: allows archive path" "$OUTPUT" '"allow"'
@@ -175,7 +175,8 @@ teardown_tmpdir
 
 # Test: falls back to archive when no session dirs exist
 setup_tmpdir
-echo "Archive content from Feb" > .claude/memory/archive/archive-2026-02-28.md
+mkdir -p .claude/memory/archives/archive-2026-02-28
+echo "Archive content from Feb" > .claude/memory/archives/archive-2026-02-28/archive-2026-02-28.md
 OUTPUT=$(echo '{"session_id":"ccc-333"}' \
   | bash "$SCRIPT_DIR/session-start.sh" 2>&1)
 assert_json_valid "session-start: valid JSON (archive fallback)" "$OUTPUT"
@@ -259,7 +260,8 @@ assert_contains "archival: lists session-2026-03-09-003 log" "$OUTPUT" "session-
 # Newest should NOT be listed
 assert_not_contains "archival: does NOT list newest (session-2026-03-09-004)" "$OUTPUT" "session-2026-03-09-004/session-2026-03-09-004.md"
 # Should include archive target
-assert_contains "archival: includes archive target" "$OUTPUT" "archive/archive-"
+assert_contains "archival: includes archive name" "$OUTPUT" "Archive name: archive-"
+assert_contains "archival: includes archives directory path" "$OUTPUT" ".claude/memory/archives/archive-"
 # Should mention directory deletion
 assert_contains "archival: mentions rm -r" "$OUTPUT" "rm -r"
 teardown_tmpdir
@@ -426,7 +428,8 @@ teardown_tmpdir
 setup_tmpdir
 mkdir -p ".claude/memory/session-2026-03-09-001"
 # Directory exists but no log file inside
-echo "Archive fallback content" > .claude/memory/archive/archive-2026-03-01.md
+mkdir -p .claude/memory/archives/archive-2026-03-01
+echo "Archive fallback content" > .claude/memory/archives/archive-2026-03-01/archive-2026-03-01.md
 OUTPUT=$(echo '{"session_id":"test"}' \
   | bash "$SCRIPT_DIR/session-start.sh" 2>&1)
 assert_contains "edge: falls back to archive when log missing from dir" "$OUTPUT" "Archive fallback content"

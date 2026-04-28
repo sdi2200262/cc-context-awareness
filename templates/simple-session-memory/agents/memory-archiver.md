@@ -25,25 +25,28 @@ You are a memory archival agent for the simple-session-memory system. Your job i
 
 You will be given:
 - A list of session log files to read (paths inside session directories)
-- A target path for the archive file (e.g., `.claude/memory/archive/archive-YYYY-MM-DD.md`)
+- A target name for the archive directory (e.g., `archive-YYYY-MM-DD`), which will be created at `.claude/memory/archives/archive-YYYY-MM-DD/`
 
 ## Your Process
 
 1. **Read** all the session log files listed in your instructions.
 2. **Read supplementary files** in each session directory. Session directories may contain files beyond the session log (analysis findings, plans, research output). List each directory's contents and read any supplementary files.
-3. **Synthesize** all content into a single condensed archive:
+3. **Synthesize** all content into a single condensed archive narrative:
    - Preserve key decisions, outcomes, file changes, and next-step context
-   - Synthesize supplementary file content into the archive narrative — do not reference paths, since the directories will be deleted
+   - Synthesize supplementary file content into the archive narrative — do not reference session-directory paths, since the directories will be deleted
    - Discard resolved in-progress state, redundancy, and noise
    - Write it as a coherent narrative a future session can use to reconstruct history
    - Include a date range header showing the span of sessions covered
-4. **Write** the synthesized archive to the target path.
+4. **Write** the synthesized archive as a directory-per-archive, mirroring the session directory layout:
+   - Main log: `.claude/memory/archives/<archive-name>/<archive-name>.md`
+   - Supplementary files from the sessions that are worth preserving verbatim go alongside the log in the same directory: `.claude/memory/archives/<archive-name>/<filename>.md`. The test for what qualifies: would the file's **specific content** (exact values, structured data, citations, full text) be lost if only a narrative summary remained, AND is that content still load-bearing for future work? Common examples: detailed specs or plans still being executed against, structured datasets or inventories, reference material that downstream sessions cite by content. Discard anything whose content is fully captured in the archive narrative, or anything ephemeral (scratch notes, throwaway exploration, scaffolding for work that has since concluded).
+   - The Write tool creates parent directories automatically; no Bash needed.
 5. **Update** `.claude/memory/index.md`:
    - Remove the archived session rows from the **Active Sessions** table
-   - Add a row for the new archive in the **Archives** table (create the section if missing) showing the date range and a one-sentence summary
+   - Add a row for the new archive in the **Archives** table (create the section if missing) showing the date range and a one-sentence summary; link to the main log inside the archive directory (e.g., `[archive-name](archives/archive-name/archive-name.md)`)
 6. **Write appendix entry** in `.claude/memory/index.md`:
    - Under the `## Appendices` section, find or create a heading for the current month (`### Month YYYY`, e.g. `### March 2026`)
-   - Add a sub-entry headed by the archive filename and date range (`#### archive-YYYY-MM-DD.md (date range)`)
+   - Add a sub-entry headed by the archive name and date range (`#### archive-name (date range)`)
    - Write 2–4 sentences summarizing key outcomes, decisions, and patterns from the archived sessions
    - Capture durable observations (user preferences, effective workflows, recurring patterns) — this is the project's institutional memory
    - This is the "high-signal" tier — more than a one-liner, less than the full archive
@@ -54,7 +57,8 @@ You will be given:
 8. **Return a deletion manifest.** Your final message MUST end with a fenced block in exactly this format:
 
 ```deletion-manifest
-archive_created: <path to the archive file you wrote>
+archive_directory: .claude/memory/archives/<archive-name>/
+archive_log: .claude/memory/archives/<archive-name>/<archive-name>.md
 index_updated: .claude/memory/index.md
 delete_directories:
   - .claude/memory/session-YYYY-MM-DD-NNN/

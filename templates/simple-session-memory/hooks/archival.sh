@@ -46,16 +46,16 @@ for d in "${TO_ARCHIVE[@]}"; do
 done
 
 TODAY="$(date +%Y-%m-%d)"
-ARCHIVE_TARGET=".claude/memory/archive/archive-${TODAY}.md"
+ARCHIVE_NAME="archive-${TODAY}"
 
 jq -n \
   --arg files "$FILES_LIST" \
   --arg dirs "$DIRS_LIST" \
   --arg n "$ARCHIVE_COUNT" \
-  --arg target "$ARCHIVE_TARGET" \
+  --arg name "$ARCHIVE_NAME" \
   '{
     "hookSpecificOutput": {
       "hookEventName": "SessionStart",
-      "additionalContext": ("SESSION MEMORY ARCHIVAL NEEDED\n\n" + $n + " session directories have accumulated. Before proceeding with any other work, delegate to the memory-archiver agent to archive them.\n\nSession logs to archive (read these):\n" + $files + "\nAlso check each session directory for supplementary files and read those too.\n\nArchive target: " + $target + "\n\nThe newest session directory is NOT in this list and must NOT be deleted.\n\nIMPORTANT — After the memory-archiver agent returns:\n1. Read the deletion manifest in its final message (the ```deletion-manifest``` fenced block).\n2. Delete each directory listed under delete_directories using: rm -r .claude/memory/<session-name>/\n3. Use relative paths. Delete one directory per command.\nThe archiver does NOT delete anything itself — you must handle all deletions here.")
+      "additionalContext": ("SESSION MEMORY ARCHIVAL NEEDED\n\n" + $n + " session directories have accumulated. Before proceeding with any other work, delegate to the memory-archiver agent to archive them.\n\nSession logs to archive (read these):\n" + $files + "\nAlso check each session directory for supplementary files and read those too.\n\nArchive name: " + $name + "  (the agent will create .claude/memory/archives/" + $name + "/ containing " + $name + ".md and any supplementary attachments worth preserving)\n\nThe newest session directory is NOT in this list and must NOT be deleted.\n\nIMPORTANT — After the memory-archiver agent returns:\n1. Read the deletion manifest in its final message (the ```deletion-manifest``` fenced block).\n2. Delete each directory listed under delete_directories using: rm -r .claude/memory/<session-name>/\n3. Use relative paths. Delete one directory per command.\nThe archiver does NOT delete anything itself — you must handle all deletions here.")
     }
   }'
