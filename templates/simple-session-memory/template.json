@@ -19,7 +19,7 @@
     "Edit(.claude/memory/**)",
     "Bash(rm -r .claude/memory/session-*)"
   ],
-  "directories": ["memory", "memory/archive"],
+  "directories": ["memory", "memory/archives"],
   "claude_snippet": "CLAUDE.snippet.md",
   "claude_snippet_marker": "Session Memory System"
 }

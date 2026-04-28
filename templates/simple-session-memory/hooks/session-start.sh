@@ -39,8 +39,18 @@ if [[ -n "$LATEST_DIR" ]]; then
   fi
 fi
 
-# No session directory with a valid log — fall back to most recent archive
-LATEST_ARCHIVE="$(ls -t "$MEMORY_DIR/archive"/archive-*.md 2>/dev/null | head -1 || true)"
+# No session directory with a valid log — fall back to most recent archive.
+# Archives use directory-per-archive layout: archives/<name>/<name>.md. Each
+# archive directory may also contain supplementary attachments; the log itself
+# is the file whose basename matches the directory name.
+LATEST_ARCHIVE="$(
+  for d in "$MEMORY_DIR/archives"/*/; do
+    [[ -d "$d" ]] || continue
+    name="$(basename "$d")"
+    log="${d}${name}.md"
+    [[ -f "$log" ]] && echo "$log"
+  done 2>/dev/null | sort -r | head -1 || true
+)"
 
 if [[ -n "$LATEST_ARCHIVE" ]]; then
   ARCHIVE_CONTENT="$(cat "$LATEST_ARCHIVE")"

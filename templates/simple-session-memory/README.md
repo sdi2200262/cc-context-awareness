@@ -43,7 +43,7 @@ Each session gets its own directory containing the log and any supplementary fil
   session-2026-03-04-002/
     session-2026-03-04-002.md
   index.md
-  archive/
+  archives/
 ```
 
 Session directories are named `session-YYYY-MM-DD-NNN` where `NNN` is a per-day counter (resets daily). The log file inside shares the directory name. Supplementary files (analysis, plans, research) live alongside the log — no separate attachments convention needed. The co-location makes relationships clear and cleanup simple (`rm -r` the whole directory).
@@ -77,7 +77,7 @@ The base system is installed automatically if not already present.
     memory-archiver.md              # Custom archival agent (sonnet, acceptEdits)
   memory/
     index.md                        # Running index of all sessions
-    archive/                        # Synthesized archives of older sessions
+    archives/                       # Synthesized archives (one directory per archive)
   skills/
     log-session-memory/SKILL.md     # Detailed logging procedure (read by 50% threshold)
     migrate-simple-session-memory/  # Migration skill for upgrades
@@ -176,7 +176,7 @@ Built out authentication middleware and API rate limiting. Key decisions: ...
 When 5 session directories accumulate in `.claude/memory/`, `archival.sh` fires at the start of the next post-compaction session (after `session-start.sh` restores context). It injects instructions telling Claude to delegate to the `memory-archiver` custom agent (`.claude/agents/memory-archiver.md`), which:
 
 1. Archives all sessions **except the most recent** (the newest is always preserved)
-2. Creates a synthesized archive at `.claude/memory/archive/archive-YYYY-MM-DD.md`
+2. Creates a synthesized archive directory at `.claude/memory/archives/archive-YYYY-MM-DD/` containing the archive log and any supplementary attachments worth preserving verbatim (load-bearing specs, structured data, reference material that downstream sessions cite by content)
 3. Updates `index.md` — moves entries to Archives, writes Appendix summaries with durable observations, compresses prior-month appendices
 4. Returns a deletion manifest — the calling agent handles all directory removals
 
