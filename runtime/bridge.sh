@@ -7,7 +7,7 @@
 set -euo pipefail
 
 INPUT="$(cat)"
-if SID_PCT="$(echo "$INPUT" | jq -r '[.session_id // "", .context_window.used_percentage // 0] | @tsv' 2>/dev/null)"; then
+if SID_PCT="$(echo "$INPUT" | jq -r '[.session_id // "", ((.context_window.used_percentage // 0) | floor)] | @tsv' 2>/dev/null)"; then
   read -r SID PCT <<< "$SID_PCT"
   [[ -n "$SID" ]] && echo "$PCT" > "/tmp/.cc-ctx-pct-${SID}"
 fi

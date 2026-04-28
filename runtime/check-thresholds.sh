@@ -14,7 +14,9 @@ PCT_FILE="/tmp/.cc-ctx-pct-${SESSION_ID}"
 [[ ! -f "$PCT_FILE" ]] && exit 0
 
 USED_PCT="$(cat "$PCT_FILE")"
-[[ -z "$USED_PCT" || "$USED_PCT" == "0" ]] && exit 0
+# Coerce to integer (Claude Code's used_percentage may be a float, e.g. 23.5).
+USED_PCT="${USED_PCT%%.*}"
+[[ -z "$USED_PCT" || ! "$USED_PCT" =~ ^[0-9]+$ || "$USED_PCT" == "0" ]] && exit 0
 
 REMAINING_PCT=$(( 100 - USED_PCT ))
 
