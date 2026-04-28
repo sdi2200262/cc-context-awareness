@@ -207,4 +207,9 @@ program.action(async () => {
   }
 });
 
-program.parse();
+// Use parseAsync + explicit exit so the process terminates after action handlers
+// resolve. Without this, @inquirer/prompts leaves stdin referenced on macOS
+// (raw mode + keypress listeners) and the event loop never drains, causing the
+// CLI to hang post-success. Linux's TTY teardown releases stdin cleanly, which
+// is why this only manifests on macOS.
+program.parseAsync(process.argv).then(() => process.exit(0));
