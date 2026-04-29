@@ -82,6 +82,8 @@ Claude Code has built-in context awareness, but it's hardcoded — a single warn
 | Custom messages | No | Yes — inject any instruction |
 | Trigger workflows | No | Yes — pre-compaction saves, behavioral changes |
 
+For on-demand context checks — where Claude queries its own usage at any point rather than waiting for a threshold — see [cc-get-my-context](https://github.com/sdi2200262/cc-get-my-context). The two tools are complementary: cc-context-awareness handles automatic threshold-driven workflows; cc-get-my-context handles explicit, agent-initiated queries.
+
 ## How It Works
 
 The goal is to inject custom instructions into Claude's conversation when context thresholds are crossed. Claude Code's extension points don't support this directly, so this tool bridges two mechanisms:
@@ -134,6 +136,8 @@ Automated session memory for single-agent sessions. Claude writes incremental me
 auto-compact →  memory log loaded as context after compaction
 every 5 logs →  custom agent archives into a compressed summary
 ```
+
+The log skill can also be invoked manually at any time — e.g., to force a checkpoint before a threshold fires. Pair with [cc-get-my-context](https://github.com/sdi2200262/cc-get-my-context) to supply an accurate context reading in that case.
 
 See [`templates/simple-session-memory/README.md`](templates/simple-session-memory/README.md) for full details.
 

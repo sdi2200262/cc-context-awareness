@@ -98,6 +98,8 @@ CLAUDE.md                           # Instructions appended (optional)
 | 65% | `memory-65` | Claude appends progress update |
 | 80% | `memory-80` | Claude appends final update + suggests /compact |
 
+The log skill (`.claude/skills/log-session-memory/SKILL.md`) can also be invoked manually — e.g., at 30% if you want an early checkpoint. For manual invocations, pair with [cc-get-my-context](https://github.com/sdi2200262/cc-get-my-context) to get the actual current percentage for `context_at_log` (threshold-triggered logs already receive the percentage via the injected reminder).
+
 ## Memory Log Format
 
 ```markdown
