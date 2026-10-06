@@ -9,11 +9,18 @@ set -euo pipefail
 SESSION_ID="$(cat | jq -r '.session_id // empty')"
 [[ -z "$SESSION_ID" ]] && exit 0
 
-# Determine config file location (local takes precedence over global)
-if [[ -f "./.claude/cc-context-awareness/config.json" ]]; then
+# Determine config file location (env override > local project > user global > script dir fallback)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -n "${CC_CONTEXT_CONFIG:-}" && -f "${CC_CONTEXT_CONFIG}" ]]; then
+  CONFIG_FILE="${CC_CONTEXT_CONFIG}"
+elif [[ -f "./.claude/cc-context-awareness/config.json" ]]; then
   CONFIG_FILE="./.claude/cc-context-awareness/config.json"
 elif [[ -f "$HOME/.claude/cc-context-awareness/config.json" ]]; then
   CONFIG_FILE="$HOME/.claude/cc-context-awareness/config.json"
+elif [[ -f "${SCRIPT_DIR}/config.json" ]]; then
+  CONFIG_FILE="${SCRIPT_DIR}/config.json"
+elif [[ -f "${SCRIPT_DIR}/config.default.json" ]]; then
+  CONFIG_FILE="${SCRIPT_DIR}/config.default.json"
 else
   CONFIG_FILE=""
 fi

@@ -12,4 +12,7 @@ if SID_PCT="$(echo "$INPUT" | jq -r '[.session_id // "", ((.context_window.used_
   [[ -n "$SID" ]] && echo "$PCT" > "/tmp/.cc-ctx-pct-${SID}"
 fi
 # Only pass through to stdout if piped to a downstream tool
-[ -p /dev/stdout ] && echo "$INPUT"
+if [ -p /dev/stdout ]; then
+  echo "$INPUT"
+fi
+

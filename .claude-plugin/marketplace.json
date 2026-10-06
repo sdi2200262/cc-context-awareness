@@ -1,0 +1,22 @@
+{
+  "name": "cc-context-awareness",
+  "owner": {
+    "name": "CobuterMan"
+  },
+  "description": "Configurable context window thresholds and automated warning hooks for Claude Code.",
+  "plugins": [
+    {
+      "name": "context-awareness",
+      "source": "./plugins/context-awareness",
+      "description": "Configurable context thresholds that inject warnings into Claude Code before context exhaustion.",
+      "category": "context-management",
+      "tags": ["context-window", "hooks", "thresholds", "automation"],
+      "license": "MIT",
+      "homepage": "https://github.com/sdi2200262/cc-context-awareness",
+      "repository": "https://github.com/sdi2200262/cc-context-awareness",
+      "author": {
+        "name": "CobuterMan"
+      }
+    }
+  ]
+}
